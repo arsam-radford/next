@@ -7,7 +7,6 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { MermaidApp } from '.';
 
 import { Button, ButtonGroup, Tooltip, Box, useColorModeValue, useToken } from '@chakra-ui/react';
 import { renderAsync } from 'pele/lazy';
@@ -21,8 +20,9 @@ import { MdCode, MdEdit } from 'react-icons/md';
 import { BsFiletypeSvg } from 'react-icons/bs';
 import { PiGraph } from 'react-icons/pi';
 
+import { state as AppState } from "./index";
+import { App, AppGroup } from "../../schema";
 import { AppWindow } from '../../components';
-import { isApp } from '../../schema';
 
 import './styles.css';
 
@@ -57,18 +57,18 @@ const useSvgStore = create<{
 }));
 
 // Text of the CodeEditor this diagram was opened from, while it exists and is in Mermaid mode
-function useSourceCode(app: MermaidApp): string | undefined {
+function useSourceCode(app: App): string | undefined {
   const sourceId = app.data.sourceApps?.[0];
   return useAppStore((state) => {
     const source = sourceId ? state.apps.find((a) => a._id === sourceId) : undefined;
-    if (source && isApp(source, 'CodeEditor') && source.data.state.language === 'mermaid') return source.data.state.content;
+    if (source?.data.type === 'CodeEditor' && source.data.state.language === 'mermaid') return source.data.state.content;
     return undefined;
   });
 }
 
 /* App component for Mermaid */
-function AppComponent(props: MermaidApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const assets = useAssetStore((state) => state.assets);
   const update = useAppStore((state) => state.update);
 
@@ -205,8 +205,8 @@ function AppComponent(props: MermaidApp): JSX.Element {
 }
 
 /* App toolbar component for the app Mermaid */
-function ToolbarComponent(props: MermaidApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const assets = useAssetStore((state) => state.assets);
   const [file, setFile] = useState<Asset>();
   const code = useSourceCode(props) ?? s.content;
@@ -304,6 +304,6 @@ function ToolbarComponent(props: MermaidApp): JSX.Element {
  * Grouped App toolbar component, this component will display when a group of apps are selected
  * @returns JSX.Element | null
  */
-const GroupedToolbarComponent = (props: { apps: MermaidApp[] }) => { return null; };
+const GroupedToolbarComponent = (props: { apps: AppGroup }) => { return null; };
 
 export default { AppComponent, ToolbarComponent, GroupedToolbarComponent };

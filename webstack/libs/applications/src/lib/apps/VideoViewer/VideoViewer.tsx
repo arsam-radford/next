@@ -98,8 +98,8 @@ import {
   clockOffsetMs,
 } from '@sage3/frontend';
 
-import { AppSchema } from '../../schema';
-import { state as AppState, VideoViewerApp } from './index';
+import { App, AppSchema, AppGroup } from '../../schema';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 import { initialValues } from '../../initialValues';
 
@@ -133,8 +133,8 @@ function calcTarget(currentTime: number, syncServerTime: number, duration: numbe
 // AppComponent — renders the video element and owns the sync logic
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AppComponent(props: VideoViewerApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const { roomId, boardId } = useParams();
 
   // Shared state write functions
@@ -398,8 +398,8 @@ function AppComponent(props: VideoViewerApp): JSX.Element {
 // When the state echo arrives back from Redis, the core sync effect in
 // AppComponent sees drift < threshold and does nothing — no double-seek.
 
-function ToolbarComponent(props: VideoViewerApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const { roomId, boardId } = useParams();
 
   const updateState = useAppStore((state) => state.updateState);
@@ -669,7 +669,7 @@ function ToolbarComponent(props: VideoViewerApp): JSX.Element {
 // Not implemented for VideoViewer.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const GroupedToolbarComponent = (_props: { apps: VideoViewerApp[] }) => null;
+const GroupedToolbarComponent = (_props: { apps: AppGroup }) => null;
 
 export default { AppComponent, ToolbarComponent, GroupedToolbarComponent };
 

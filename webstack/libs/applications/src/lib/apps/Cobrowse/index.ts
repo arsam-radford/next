@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'CoBrowser';
 
 /**
  * SAGE3 application: CoBrowser
@@ -36,4 +33,4 @@ export const init: Partial<state> = {
   refreshSeed: 0,
 };
 
-export type CobrowseApp = App<typeof name>;
+export const name = 'CoBrowser';

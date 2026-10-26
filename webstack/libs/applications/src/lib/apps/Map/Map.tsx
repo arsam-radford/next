@@ -58,8 +58,9 @@ import { Asset } from '@sage3/shared/types';
 import { isGeoTiff, isTiff } from '@sage3/shared';
 import { useAppStore, useAssetStore, apiUrls, useHexColor } from '@sage3/frontend';
 
+import { App } from '../../schema';
 import { AppWindow } from '../../components';
-import { LayerType, MapApp } from './index';
+import { state as AppState, LayerType } from './index';
 
 import { getHexColor, SAGEColors, colors } from '@sage3/shared';
 
@@ -393,8 +394,8 @@ export const useStore = create<MapStore>((set) => ({
 }));
 
 // The map app component
-function AppComponent(props: MapApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
 
   // Ref to hold the single MapLibre instance
@@ -503,8 +504,8 @@ function AppComponent(props: MapApp): JSX.Element {
   );
 }
 
-function ToolbarComponent(props: MapApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
   const update = useAppStore((state) => state.update);
 
@@ -714,7 +715,7 @@ function LegendOverlay(props: { layers: LayerType[]; appId: string }) {
   };
 
   // Color the text selection
-  const colorLayer = (assetId: string, value: string) => {
+  const colorLayer = (assetId: string, value: LayerType['color']) => {
     const updatedLayers = props.layers.map((layer) => {
       if (layer.assetId === assetId) {
         return { ...layer, color: value };
@@ -724,7 +725,7 @@ function LegendOverlay(props: { layers: LayerType[]; appId: string }) {
     useAppStore.getState().updateState(props.appId, { layers: updatedLayers });
   };
 
-  const setLayerColorScale = (assetId: string, value: string) => {
+  const setLayerColorScale = (assetId: string, value: LayerType['colorScale']) => {
     const updatedLayers = props.layers.map((layer) => {
       if (layer.assetId === assetId) {
         return { ...layer, colorScale: value };
@@ -797,7 +798,11 @@ function LegendOverlay(props: { layers: LayerType[]; appId: string }) {
     '#e14109, #c52603, #a41301, #7a0403' +
     ')';
 
-  const colorScales = [
+  const colorScales: readonly {
+    readonly name: string;
+    readonly value: LayerType['colorScale'];
+    readonly hex: string;
+  }[] = [
     { name: 'Greyscale', value: 'greys', hex: greys },
     { name: 'Inferno', value: 'inferno', hex: inferno },
     { name: 'Viridis', value: 'viridis', hex: viridis },

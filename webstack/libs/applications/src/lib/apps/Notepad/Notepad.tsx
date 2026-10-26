@@ -23,7 +23,7 @@ import 'quill/dist/quill.snow.css';
 import './styles.css';
 
 // SAGE Imports
-import { NotepadApp } from './index';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 import { App } from '@sage3/applications/schema';
 
@@ -82,12 +82,12 @@ const useStore = create<NotepadStore>()((set) => ({
   setReinit: (id: string, value: boolean) => set((s) => ({ ...s, reinit: { ...s.reinit, ...{ [id]: value } } })),
 }));
 
-function AppComponent(props: NotepadApp): JSX.Element {
+function AppComponent(props: App): JSX.Element {
   // user
   const { user } = useUser();
 
   // State
-  const s = props.data.state;
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
 
   // Quill and Toolbar Refs
@@ -183,8 +183,8 @@ function AppComponent(props: NotepadApp): JSX.Element {
 
 /* App toolbar component for the app SVGBox */
 
-function ToolbarComponent(props: NotepadApp): JSX.Element {
-  // const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  // const s = props.data.state as AppState;
   const editor: Quill = useStore((state) => state.editor[props._id]);
 
   // Reinitialize the editor when the user clicks refresh

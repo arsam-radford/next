@@ -51,8 +51,9 @@ import {
   useLinkStore,
 } from '@sage3/frontend';
 
+import { App } from '../../schema';
 import { AppWindow } from '../../components';
-import { CodeEditorApp } from '.';
+import { state as AppState } from '.';
 
 // Yjs Imports
 import { MonacoBinding } from 'y-monaco';
@@ -91,9 +92,9 @@ const useStore = create<CodeStore>()((set) => ({
 }));
 
 /* App component for CodeEditor */
-function AppComponent(props: CodeEditorApp): JSX.Element {
+function AppComponent(props: App): JSX.Element {
   // SAGE state
-  const s = props.data.state;
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
 
   // User
@@ -235,8 +236,8 @@ function AppComponent(props: CodeEditorApp): JSX.Element {
 }
 
 /* App toolbar component for the app CodeEditor */
-function ToolbarComponent(props: CodeEditorApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   // Room and board
   const { roomId, boardId } = useParams();
   // display some notifications

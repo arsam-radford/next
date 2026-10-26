@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'Notepad';
 
 export const schema = z.object({
   content: z.object({
@@ -22,4 +19,4 @@ export const init: state = {
   content: { ops: [] },
 };
 
-export type NotepadApp = App<typeof name>;
+export const name = 'Notepad';

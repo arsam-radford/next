@@ -12,9 +12,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'PDFViewer';
 
 export const schema = z.object({
   assetid: z.string(),
@@ -41,4 +38,4 @@ export const init: Partial<state> = {
   client: '',
 };
 
-export type PDFViewerApp = App<typeof name>;
+export const name = 'PDFViewer';

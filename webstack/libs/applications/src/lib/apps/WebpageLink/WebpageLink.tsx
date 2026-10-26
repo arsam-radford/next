@@ -32,8 +32,8 @@ import { throttle } from 'throttle-debounce';
 // Zustand
 import { create } from 'zustand';
 
-import { WebpageLinkApp } from './index';
-import { AppSchema } from '../../schema';
+import { state as AppState } from './index';
+import { App, AppSchema } from '../../schema';
 import { AppWindow } from '../../components';
 
 // Electron and Browser components
@@ -52,8 +52,8 @@ export const useStore = create<SockStore>()((set) => ({
 
 /* App component for WebpageLink */
 
-function AppComponent(props: WebpageLinkApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   // UI Stuff
   const dividerColor = useColorModeValue('gray.300', 'gray.600');
   const backgroundColor = useColorModeValue('red.400', 'red.400');
@@ -196,8 +196,8 @@ function AppComponent(props: WebpageLinkApp): JSX.Element {
 
 /* App toolbar component for the app BoardLink */
 
-function ToolbarComponent(props: WebpageLinkApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   // Stores
   const createApp = useAppStore((state) => state.create);
   const sock = useStore((state) => state.sock[props._id]);

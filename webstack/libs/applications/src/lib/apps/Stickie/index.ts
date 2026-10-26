@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'Stickie';
 
 export const schema = z.object({
   text: z.string(),
@@ -24,7 +21,7 @@ export const schema = z.object({
 });
 export type state = z.infer<typeof schema>;
 
-export const init: Partial<state> = {
+export const init: state = {
   text: 'stickie note',
   fontSize: 24,
   color: 'yellow',
@@ -33,4 +30,4 @@ export const init: Partial<state> = {
   executeInfo: { executeFunc: '', params: {} },
 };
 
-export type StickieApp = App<typeof name>;
+export const name = 'Stickie';

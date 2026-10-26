@@ -17,7 +17,8 @@ import { useYjsStore } from './useYjsStore'
 
 // SAGE3
 import { setupApp, useAppStore, useUIStore, useUser } from '@sage3/frontend';
-import { DrawingApp } from './index';
+import { App, AppGroup } from '../../schema';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 
 // Styling
@@ -39,8 +40,8 @@ const useStore = create<DrawStore>()((set) => ({
 }));
 
 /* App component for Drawing */
-function AppComponent(props: DrawingApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const saveEditor = useStore((state) => state.saveEditor);
   const updateState = useAppStore((state) => state.updateState);
   const store = useYjsStore({ roomId: props._id })
@@ -162,8 +163,8 @@ function AppComponent(props: DrawingApp): JSX.Element {
 }
 
 /* App toolbar component for the app Drawing */
-const ToolbarComponent = (props: DrawingApp) => {
-  const s = props.data.state;
+const ToolbarComponent = (props: App) => {
+  const s = props.data.state as AppState;
   const ed: Editor = useStore((state) => state.ed[props._id]);
   const createApp = useAppStore((state) => state.create);
   const updateState = useAppStore((state) => state.updateState);
@@ -267,7 +268,7 @@ const ToolbarComponent = (props: DrawingApp) => {
  * Grouped App toolbar component, this component will display when a group of apps are selected
  * @returns JSX.Element | null
  */
-const GroupedToolbarComponent = (props: { apps: DrawingApp[] }) => {
+const GroupedToolbarComponent = (props: { apps: AppGroup }) => {
   return null;
 };
 

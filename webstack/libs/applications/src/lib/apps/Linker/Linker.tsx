@@ -31,7 +31,8 @@ import {
 } from '@chakra-ui/react';
 
 // SAGE
-import { LinkerApp } from './index';
+import { App } from '../../schema';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 import { useAppStore } from '@sage3/frontend';
 
@@ -40,8 +41,8 @@ import './styling.css';
 
 /* App component for LinkerApp */
 
-function AppComponent(props: LinkerApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
 
   // Stores
   const updateState = useAppStore((state) => state.updateState);
@@ -221,7 +222,7 @@ function AppComponent(props: LinkerApp): JSX.Element {
 }
 
 /* App toolbar component for the app LinkerApp */
-function ToolbarComponent(props: LinkerApp) { return null; }
+function ToolbarComponent(props: App) { return null; }
 
 /**
  * Grouped App toolbar component, this component will display when a group of apps are selected

@@ -12,11 +12,12 @@ import { format } from 'date-fns/format';
 
 import { useUser, downloadFile } from '@sage3/frontend';
 
-import { ChatApp } from './index';
+import { App } from '../../schema';
+import { state as AppState } from './index';
 
 /* App toolbar component for the app Chat: download the transcript as text. */
-export function ToolbarComponent(props: ChatApp): JSX.Element {
-  const s = props.data.state;
+export function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const { user } = useUser();
   // Sort messages by creation date to display in order
   const sortedMessages = s.messages ? s.messages.sort((a, b) => a.creationDate - b.creationDate) : [];

@@ -30,7 +30,8 @@ import {
 import { create } from 'zustand';
 
 import { useAppStore, useUser, processContentURL, ConfirmValueModal, apiUrls, useUIStore, useWindowResize } from '@sage3/frontend';
-import { WebviewApp } from './index';
+import { App } from '../../schema';
+import { state as AppState } from './index';
 import { AppWindow, ElectronRequired } from '../../components';
 import { isElectron } from './util';
 
@@ -108,9 +109,9 @@ function partitionForURL(raw: string, appId: string): string {
 
 /* App component for Webview */
 
-function AppComponent(props: WebviewApp): JSX.Element {
+function AppComponent(props: App): JSX.Element {
   // App State
-  const s = props.data.state;
+  const s = props.data.state as AppState;
   const update = useAppStore((state) => state.update);
   const updateState = useAppStore((state) => state.updateState);
 
@@ -378,8 +379,8 @@ function AppComponent(props: WebviewApp): JSX.Element {
 
 /* App toolbar component for the app Webview */
 
-function ToolbarComponent(props: WebviewApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
   const mute = useStore((state) => state.mute[props._id]);
   const setMute = useStore((state) => state.setMute);

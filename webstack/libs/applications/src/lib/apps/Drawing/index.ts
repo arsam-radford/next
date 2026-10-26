@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'Drawing';
 
 /**
  * SAGE3 application: Drawing
@@ -28,4 +25,4 @@ export const init: Partial<state> = {
   follow: '',
 };
 
-export type DrawingApp = App<typeof name>;
+export const name = 'Drawing';

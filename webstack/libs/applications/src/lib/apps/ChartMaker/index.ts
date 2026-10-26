@@ -9,8 +9,6 @@
 import { Asset } from '@sage3/shared/types';
 import { z } from 'zod';
 
-export const name = 'ChartMaker';
-
 /**
  * SAGE3 application: chartMaker
  * created by: RJ
@@ -60,3 +58,5 @@ export const init: Partial<state> = {
     },
   ],
 };
+
+export const name = 'ChartMaker';

@@ -12,9 +12,9 @@ import { MdExitToApp, MdRefresh } from 'react-icons/md';
 import { PublicInformation } from '@sage3/shared/types';
 import { apiUrls } from '@sage3/frontend';
 
-import { BoardLinkApp } from '../index';
+import { App } from '../../../schema';
 
-export function OtherServerCard(props: BoardLinkApp): JSX.Element {
+export function OtherServerCard(props: App<'BoardLink'>): JSX.Element {
   const s = props.data.state;
 
   // Other Server URl

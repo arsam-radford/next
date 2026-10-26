@@ -68,7 +68,7 @@ class SAGE3BoardsCollection extends SAGE3Collection<BoardSchema> {
         const fetched = await Promise.all(
           uncached.map(async (boardId) => {
             const docs = await AppsCollection.query('boardId', boardId);
-            const apps = (docs || []).map((app): AppPreviewInfo => ({
+            const apps = (docs || []).map<AppPreviewInfo>((app) => ({
               position: app.data.position,
               size: app.data.size,
               type: app.data.type,

@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'DeepZoomImage';
 
 /**
  * SAGE3 application: DeepZoomImage
@@ -29,4 +26,4 @@ export const init: Partial<state> = {
   zoomCenter: [0.5, 0.5],
 };
 
-export type DeepZoomImageApp = App<typeof name>;
+export const name = 'DeepZoomImage';

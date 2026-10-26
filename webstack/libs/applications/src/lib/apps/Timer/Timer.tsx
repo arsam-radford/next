@@ -12,7 +12,8 @@ import { MdAdd, MdRemove, MdPlayArrow, MdPause, MdReplay } from 'react-icons/md'
 
 import { useAppStore, zeroPad, serverTime } from '@sage3/frontend';
 
-import { TimerApp } from './index';
+import { state as AppState } from './index';
+import { App } from '../../schema';
 import { AppWindow } from '../../components';
 
 // Styling
@@ -20,8 +21,8 @@ import './styling.css';
 
 /* App component for Timer */
 
-function AppComponent(props: TimerApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
 
   const [scale, setScale] = useState(1);

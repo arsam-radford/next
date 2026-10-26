@@ -13,11 +13,10 @@ import { APIHttp, apiUrls, useThrottlePresenceUsers } from '@sage3/frontend';
 import { Board, Position, Size } from '@sage3/shared/types';
 
 import { App, AppName } from '../../../schema';
-import { BoardLinkApp } from '../index';
 
 /* App component for BoardLink */
 
-export function BoardCard(props: BoardLinkApp): JSX.Element {
+export function BoardCard(props: App<'BoardLink'>): JSX.Element {
   const s = props.data.state;
 
   // Board
@@ -59,13 +58,7 @@ export function BoardCard(props: BoardLinkApp): JSX.Element {
       const apps = res.data;
       const appArray = [] as { position: Position; size: Size; type: AppName; id: string }[];
       apps.forEach((app) => {
-        const aInfo: { position: Position; size: Size; type: AppName; id: string } = {
-          position: app.data.position,
-          size: app.data.size,
-          type: app.data.type,
-          id: app._id,
-        };
-        appArray.push(aInfo);
+        appArray.push({ position: app.data.position, size: app.data.size, type: app.data.type, id: app._id });
       });
       const appsLeft = apps.map((app) => app.data.position.x);
       const appsRight = apps.map((app) => app.data.position.x + app.data.size.width);

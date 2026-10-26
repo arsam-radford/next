@@ -34,7 +34,8 @@ import {
 import { SAGEColors } from '@sage3/shared';
 import { InsightSchema } from '@sage3/shared/types';
 
-import { StickieApp, state as StickieState } from '.';
+import { state as AppState } from './';
+import { App, AppGroup } from '../../schema';
 import { AppWindow } from '../../components';
 
 // Styling for the placeholder text
@@ -80,9 +81,9 @@ const stickieTheme = EditorView.theme({
  * @param {AppSchema} props
  * @returns {JSX.Element}
  */
-function AppComponent(props: StickieApp): JSX.Element {
+function AppComponent(props: App): JSX.Element {
   // Get the data for this app from the props
-  const s = props.data.state;
+  const s = props.data.state as AppState;
 
   const { user } = useUser();
   const { boardId, roomId } = useParams();
@@ -135,7 +136,7 @@ function AppComponent(props: StickieApp): JSX.Element {
         yText.insert(0, text);
       });
     },
-    [yApps, user],
+    [yApps, user]
   );
 
   // Detect if an update happens to s.text
@@ -424,8 +425,8 @@ function PlainSegment(props: { segment: MarkdownSegment }): JSX.Element {
   return <span className={segment.classNames.join(' ') || undefined}>{segment.text}</span>;
 }
 
-function ToolbarComponent(props: StickieApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   // Update functions from the store
   const updateState = useAppStore((state) => state.updateState);
   // Access the list of users
@@ -522,7 +523,7 @@ function ToolbarComponent(props: StickieApp): JSX.Element {
           });
       }
     },
-    [s.text, roomId],
+    [s.text, roomId]
   );
 
   const handleColorChange = (color: string) => {
@@ -659,14 +660,14 @@ function getSet(appid: string, oldvalue: string, newvalue: string): string[] {
  * Grouped App toolbar component, this component will display when a group of apps are selected
  * @returns JSX.Element | null
  */
-const GroupedToolbarComponent = (props: { apps: StickieApp[] }) => {
+const GroupedToolbarComponent = (props: { apps: AppGroup<'Stickie'> }) => {
   const updateStateBatch = useAppStore((state) => state.updateStateBatch);
   const updateInsightBatch = useInsightStore((state) => state.updateBatch);
   const { user } = useUser();
 
   const handleColorChange = (color: string) => {
     // Array of update to batch at once
-    const ba: Array<{ id: string; updates: Partial<StickieState> }> = [];
+    const ba: Array<{ id: string; updates: Partial<AppState> }> = [];
     const bi: Array<{ id: string; updates: Partial<InsightSchema> }> = [];
     // Iterate through all the selected apps
     props.apps.forEach((app) => {
@@ -681,7 +682,7 @@ const GroupedToolbarComponent = (props: { apps: StickieApp[] }) => {
 
   const handleIncreaseFont = () => {
     // Array of update to batch at once
-    const ps: Array<{ id: string; updates: Partial<StickieState> }> = [];
+    const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
     props.apps.forEach((app) => {
       if (app.data.state.lock) return;
       const size = app.data.state.fontSize + 8;
@@ -694,7 +695,7 @@ const GroupedToolbarComponent = (props: { apps: StickieApp[] }) => {
 
   const handleDecreaseFont = () => {
     // Array of update to batch at once
-    const ps: Array<{ id: string; updates: Partial<StickieState> }> = [];
+    const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
     props.apps.forEach((app) => {
       if (app.data.state.lock) return;
       const size = app.data.state.fontSize - 8;
@@ -708,7 +709,7 @@ const GroupedToolbarComponent = (props: { apps: StickieApp[] }) => {
   const handleSetFont = () => {
     const min = Math.min(...props.apps.map((app) => app.data.state.fontSize));
     // Array of update to batch at once
-    const ps: Array<{ id: string; updates: Partial<StickieState> }> = [];
+    const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
     props.apps.forEach((app) => {
       if (app.data.state.lock) return;
       ps.push({ id: app._id, updates: { fontSize: min } });
@@ -719,7 +720,7 @@ const GroupedToolbarComponent = (props: { apps: StickieApp[] }) => {
 
   const handleLock = () => {
     // Array of update to batch at once
-    const ps: Array<{ id: string; updates: Partial<StickieState> }> = [];
+    const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
     props.apps.forEach((app) => {
       if (app._createdBy !== user?._id) return;
       ps.push({ id: app._id, updates: { lock: true } });
@@ -730,7 +731,7 @@ const GroupedToolbarComponent = (props: { apps: StickieApp[] }) => {
 
   const handleUnlock = () => {
     // Array of update to batch at once
-    const ps: Array<{ id: string; updates: Partial<StickieState> }> = [];
+    const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
     props.apps.forEach((app) => {
       if (app._createdBy !== user?._id) return;
       ps.push({ id: app._id, updates: { lock: false } });
@@ -748,9 +749,7 @@ const GroupedToolbarComponent = (props: { apps: StickieApp[] }) => {
           </Button>
         </Tooltip>
         <Tooltip placement="top" hasArrow={true} label={'Set Font Size'} openDelay={400}>
-          <Button onClick={() => handleSetFont()} size="xs" px={0}>
-            {Math.min(...props.apps.map((app) => app.data.state.fontSize))}
-          </Button>
+          <Button onClick={() => handleSetFont()} size="xs" px={0}>{Math.min(...props.apps.map((app) => app.data.state.fontSize))}</Button>
         </Tooltip>
         <Tooltip placement="top" hasArrow={true} label={'Increase Font Size'} openDelay={400}>
           <Button onClick={() => handleIncreaseFont()} size="xs" px={0}>
