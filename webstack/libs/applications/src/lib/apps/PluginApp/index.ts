@@ -7,21 +7,27 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'PluginApp';
+import { pluginJSONSchema } from '@sage3/shared/types';
 
 /**
  * SAGE3 application: PluginApp
  * created by: Ryan
  */
 
-export const schema = z.any();
+export const schema = z.object({
+  pluginId: z.string(),
+  viewId: z.string(),
+  content: z.record(pluginJSONSchema),
+  contentRevision: z.number().int().nonnegative().optional(),
+  texts: z.record(z.string()).optional(),
+});
 
 export type state = z.infer<typeof schema>;
 
 export const init: Partial<state> = {
-  pluginName: '',
+  pluginId: '',
+  viewId: '',
+  content: {},
 };
 
-export type PluginAppApp = App<typeof name>;
+export const name = 'PluginApp';

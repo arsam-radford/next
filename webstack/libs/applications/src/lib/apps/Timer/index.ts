@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'Timer';
 
 /**
  * SAGE3 application: Timer
@@ -31,4 +28,4 @@ export const init: Partial<state> = {
   isRunning: false,
 };
 
-export type TimerApp = App<typeof name>;
+export const name = 'Timer';

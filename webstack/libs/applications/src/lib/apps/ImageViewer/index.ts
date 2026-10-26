@@ -12,9 +12,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'ImageViewer';
 
 const bboxType = z.array(
   z.object({
@@ -44,4 +41,4 @@ export const init: Partial<state> = {
   boxes: [],
 };
 
-export type ImageViewerApp = App<typeof name>;
+export const name = 'ImageViewer';

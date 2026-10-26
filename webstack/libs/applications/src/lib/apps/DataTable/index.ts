@@ -8,8 +8,6 @@
 
 // import {SBPrimitive} from "../../../../../sagebase/src/lib/modules";
 
-export const name = 'DataTable';
-
 type exec = {
   executeFunc: string;
   params: { [key: string]: any };
@@ -57,3 +55,5 @@ export const init: Partial<state> = {
 
   timestamp: 0.0,
 };
+
+export const name = 'DataTable';

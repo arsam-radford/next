@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'Clock';
 
 export const schema = z.object({
   file: z.string(),
@@ -29,4 +26,4 @@ export const init: Partial<state> = {
   color: 'green',
 };
 
-export type ClockApp = App<typeof name>;
+export const name = 'Clock';

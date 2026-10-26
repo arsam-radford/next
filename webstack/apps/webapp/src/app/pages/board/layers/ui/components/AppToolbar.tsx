@@ -76,6 +76,7 @@ import { formatDistance } from 'date-fns';
 
 import {
   useAbility,
+  PluginActions,
   useAppStore,
   useHexColor,
   useThrottleApps,
@@ -93,7 +94,7 @@ import {
   useLinkStore,
 } from '@sage3/frontend';
 import { SAGEColors } from '@sage3/shared';
-import { AI_ENABLED_APPS, Applications } from '@sage3/applications/apps';
+import { AI_ENABLED_APPS, Applications, getApplication } from '@sage3/applications/apps';
 import { Link, Position, Size } from '@sage3/shared/types';
 import ky from 'ky';
 import { FaLink, FaUnlink } from 'react-icons/fa';
@@ -784,7 +785,7 @@ export function AppToolbar(props: AppToolbarProps) {
   function getAppToolbar() {
     if (app && Applications[app.data.type]) {
       // Get the component from the app definition
-      const Component = Applications[app.data.type].ToolbarComponent;
+      const Component = getApplication(app.data.type).ToolbarComponent;
       // Get some application information
       const ownerName = users.find((el) => el._id === app._createdBy)?.data.name;
       const now = new Date();
@@ -823,6 +824,10 @@ export function AppToolbar(props: AppToolbarProps) {
           )}
         >
           <>
+            {/* Extension commands keep their natural width; the app's own controls take the rest. */}
+            <HStack spacing={1} flexShrink={0} mr={2}>
+              <PluginActions placement="toolbar" app={app} />
+            </HStack>
             <Box display="flex" flexDirection="row" alignItems="center" justifyContent="space-between" width="100%">
               <Box display="flex" flexDirection="row" alignItems="center" justifyContent="left" width="100%">
             <Component key={app._id} {...app}></Component>
@@ -904,6 +909,7 @@ export function AppToolbar(props: AppToolbarProps) {
                   {previousLocation.set && previousLocation.app === app._id ? 'Zoom Back' : 'Zoom to Application'}
                 </MenuItem>
                 <MenuDivider />
+                <PluginActions placement="context-menu" app={app} menuItems />
 
                 <MenuItem icon={<MdDeselect size="16px" />} onClick={() => setSelectedApp('')} py="1px" m="0">
                   Deselect Application
@@ -991,7 +997,8 @@ export function AppToolbar(props: AppToolbarProps) {
         context = `Language ${app.data.state.language}:\n\n${code}`;
       } else if (app.data.type === 'CSVViewer') {
         // Get information about the asset
-        const asset = useAssetStore.getState().assets.find((a) => a._id === app.data.state.assetid);
+        const assetId = app.data.state.assetid;
+        const asset = useAssetStore.getState().assets.find((a) => a._id === assetId);
         if (asset) {
           const dl = apiUrls.assets.getAssetById(asset.data.file);
           // get the content of the CSV file

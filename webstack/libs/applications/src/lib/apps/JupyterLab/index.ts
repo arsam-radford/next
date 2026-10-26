@@ -8,8 +8,6 @@
 
 import { z } from 'zod';
 
-export const name = 'JupyterLab';
-
 /**
  * SAGE3 application: JupyterApp
  * created by: SAGE3
@@ -29,3 +27,5 @@ export const init: state = {
   zoom: 1,
   kernel: '',
 };
+
+export const name = 'JupyterLab';

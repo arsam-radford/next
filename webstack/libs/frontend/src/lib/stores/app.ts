@@ -11,7 +11,7 @@ import { create } from 'zustand';
 // Dev Tools
 import { mountStoreDevtool } from 'simple-zustand-devtools';
 
-import { AppState, AppSchema, App, isApp } from '@sage3/applications/schema';
+import { AppState, AppSchema, AppCreateInput, App } from '@sage3/applications/schema';
 import { Board } from '@sage3/shared/types';
 // App intial Values
 import { initialValues } from '@sage3/applications/initialValues';
@@ -31,8 +31,8 @@ interface Applications {
   lastCreated: { ids: string[]; at: number } | null;
 
   clearError: () => void;
-  create: (newApp: AppSchema) => Promise<{ success: boolean; message: string; data: App }>;
-  createBatch: (newApps: AppSchema[]) => Promise<any>;
+  create: (newApp: AppCreateInput) => Promise<{ success: boolean; message: string; data: App }>;
+  createBatch: (newApps: AppCreateInput[]) => Promise<any>;
   update: (id: string, updates: Partial<AppSchema>) => Promise<boolean>;
   updateBatch: (updates: { id: string; updates: Partial<AppSchema> }[]) => Promise<void>;
   updateState: (id: string, state: Partial<AppState>) => Promise<void>;
@@ -62,7 +62,7 @@ const AppStore = create<Applications>()((set, get) => {
     clearError: () => {
       set({ error: null });
     },
-    create: async (newApp: AppSchema) => {
+    create: async (newApp: AppCreateInput) => {
       if (!SAGE3Ability.canCurrentUser('create', 'apps')) return;
       const app = await SocketAPI.sendRESTMessage('/apps', 'POST', newApp);
       if (!app.success) {
@@ -73,7 +73,7 @@ const AppStore = create<Applications>()((set, get) => {
       }
       return app;
     },
-    createBatch: async (newApps: AppSchema[]) => {
+    createBatch: async (newApps: AppCreateInput[]) => {
       if (!SAGE3Ability.canCurrentUser('create', 'apps')) return;
       const res = await SocketAPI.sendRESTMessage('/apps', 'POST', { batch: newApps });
       if (!res.success) {
@@ -199,7 +199,7 @@ const AppStore = create<Applications>()((set, get) => {
       }
       // Delete all your sreenshares when leaving board
       get()
-        .apps.filter((a) => a._createdBy === uid && isApp(a, 'Screenshare'))
+        .apps.filter((a) => a._createdBy === uid && a.data.type === 'Screenshare')
         .forEach((a) => get().delete(a._id));
       set({ apps: [] });
     },

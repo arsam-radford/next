@@ -123,8 +123,9 @@ export async function loadCollections(): Promise<void> {
     if (message.type === 'CREATE') {
       message.doc.forEach((doc) => {
         if (doc.data.type === 'WebpageLink') {
-          URLMetadata(doc.data.state.url).then((metadata) => {
-            AppsCollection.update(doc._id, 'NODE_SERVER', { state: { ...doc.data.state, meta: metadata } });
+          const state = doc.data.state;
+          URLMetadata(state.url).then((metadata) => {
+            AppsCollection.update(doc._id, 'NODE_SERVER', { state: { ...state, meta: metadata } });
           });
         }
       });

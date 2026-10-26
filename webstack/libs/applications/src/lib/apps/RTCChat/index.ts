@@ -8,8 +8,6 @@
 
 import { z } from 'zod';
 
-export const name = 'RTCChat';
-
 /**
  * SAGE3 application: RTCChat
  * created by: Luc Renambot
@@ -23,3 +21,5 @@ export type state = z.infer<typeof schema>;
 export const init: Partial<state> = {
   board: '',
 };
+
+export const name = 'RTCChat';

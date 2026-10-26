@@ -12,9 +12,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'Webview';
 
 export const schema = z.object({
   webviewurl: z.string(),
@@ -27,4 +24,4 @@ export const init: Partial<state> = {
   zoom: 1.0,
 };
 
-export type WebviewApp = App<typeof name>;
+export const name = 'Webview';

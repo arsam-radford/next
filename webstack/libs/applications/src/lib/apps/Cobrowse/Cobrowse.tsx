@@ -7,8 +7,9 @@
  */
 
 import { Button, Tooltip } from '@chakra-ui/react';
+import { App, AppGroup } from '../../schema';
 
-import { CobrowseApp } from './index';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 import { useAppStore, useUser, useUIStore, useConfigStore } from '@sage3/frontend';
 import { FaClipboard } from 'react-icons/fa';
@@ -19,8 +20,8 @@ import { TbMouse, TbMouseOff } from 'react-icons/tb';
 import { VNCAudioWrapper } from '../../components/VNC/VncWrapper';
 
 /* App component for CoBrowser */
-function AppComponent(props: CobrowseApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const selectedId = useUIStore((state) => state.selectedAppId);
   const isSelected = props._id == selectedId;
   const veoUrl = useConfigStore((state) => state.config.veoServer?.url || '');
@@ -45,8 +46,8 @@ function AppComponent(props: CobrowseApp): JSX.Element {
 }
 
 /* App toolbar component for the app CoBrowser */
-function ToolbarComponent(props: CobrowseApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
   const { user } = useUser();
 
@@ -113,7 +114,7 @@ function ToolbarComponent(props: CobrowseApp): JSX.Element {
  * Grouped App toolbar component, this component will display when a group of apps are selected
  * @returns JSX.Element | null
  */
-const GroupedToolbarComponent = (_props: { apps: CobrowseApp[] }) => {
+const GroupedToolbarComponent = (_props: { apps: AppGroup }) => {
   return null;
 };
 

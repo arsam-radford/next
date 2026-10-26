@@ -8,28 +8,38 @@
 
 // import and re-export all the apps
 import { Position, Rotation, SBDoc, Size } from '@sage3/shared/types';
-import type { AppName, AppStateMap } from './types';
-export type { AppName, AppState, AppStateMap } from './types';
+import { AppName, AppState, AppStateMap } from './types';
+export { AppName, AppState, AppStateMap } from './types';
 
 // build the main schema
-export type AppSchema<T extends AppName = AppName> = {
+type AppCommon = {
   title: string;
   roomId: string;
   boardId: string;
   position: Position;
   size: Size;
   rotation: Rotation;
-  type: T;
-  state: AppStateMap[T];
   raised: boolean;
   dragging: boolean;
   pinned: boolean;
   sourceApps?: SBDoc['_id'][];
 };
 
-export type App<T extends AppName = AppName> = SBDoc & { data: AppSchema<T> };
-export type AppGroup<T extends AppName = AppName> = Array<App<T>>;
+export type AppSchema<N extends AppName = AppName> = {
+  [K in N]: AppCommon & {
+    type: K;
+    state: AppStateMap[K];
+  };
+}[N];
 
-export function isApp<T extends AppName>(app: App, type: T): app is App<T> {
-  return app.data.type === type;
-}
+// Creation may omit state defaults; persisted apps always carry the full, correlated state.
+export type AppCreateInput = AppCommon & {
+  type: AppName;
+  state: Partial<AppState>;
+};
+
+export type App<N extends AppName = AppName> = SBDoc & {
+  data: AppSchema<N>;
+};
+
+export type AppGroup<N extends AppName = AppName> = Array<App<N>>;

@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'VegaLiteViewer';
 
 /**
  * SAGE3 application: VegaLiteViewer
@@ -27,4 +24,4 @@ export const init: Partial<state> = {
   error: false,
 };
 
-export type VegaLiteViewerApp = App<typeof name>;
+export const name = 'VegaLiteViewer';

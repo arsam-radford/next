@@ -13,8 +13,6 @@
 
 import { z } from 'zod';
 
-export const name = 'HCDP';
-
 const Baselayer = z.enum(['OpenStreetMap', 'World Imagery']);
 export type Baselayer = z.infer<typeof Baselayer>;
 
@@ -40,3 +38,5 @@ export const init: Partial<state> = {
   assetid: '',
   processing: false,
 };
+
+export const name = 'HCDP';

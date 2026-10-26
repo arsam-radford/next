@@ -18,7 +18,8 @@ import Editor from '@monaco-editor/react';
 
 // Sage3 Imports
 import { useAppStore, useUser } from '@sage3/frontend';
-import { VegaLiteApp } from '.';
+import { App } from '../../schema';
+import { state as AppState } from '.';
 import { AppWindow } from '../../components';
 import { debounce } from 'throttle-debounce';
 
@@ -30,9 +31,9 @@ import { debounce } from 'throttle-debounce';
  * @param {AppSchema} props
  * @returns {JSX.Element}
  */
-function AppComponent(props: VegaLiteApp): JSX.Element {
+function AppComponent(props: App): JSX.Element {
   // SAGE state
-  const s = props.data.state;
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
   // Styling
   const defaultTheme = useColorModeValue('vs', 'vs-dark');
@@ -99,9 +100,9 @@ function AppComponent(props: VegaLiteApp): JSX.Element {
 
 /* App toolbar component for the app VegaLite */
 
-function ToolbarComponent(props: VegaLiteApp): JSX.Element {
+function ToolbarComponent(props: App): JSX.Element {
   // State
-  const s = props.data.state;
+  const s = props.data.state as AppState;
   const createApp = useAppStore((state) => state.create);
   const { user } = useUser();
 

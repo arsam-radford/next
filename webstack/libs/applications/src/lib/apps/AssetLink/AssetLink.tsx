@@ -14,14 +14,15 @@ import { AssetCard } from './components/AssetCard';
 import { useAssetStore, apiUrls, downloadFile, isUUIDv4 } from '@sage3/frontend';
 import { Asset } from '@sage3/shared/types';
 
-import { AssetLinkApp } from './index';
+import { App } from '../../schema';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 
 
 /* App component for AssetLink */
 
-function AppComponent(props: AssetLinkApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
 
   return (
     <AppWindow app={props} disableResize={true} hideBackgroundIcon={MdFilePresent}>
@@ -31,8 +32,8 @@ function AppComponent(props: AssetLinkApp): JSX.Element {
 }
 
 /* App toolbar component for the app BoardLink */
-function ToolbarComponent(props: AssetLinkApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const [file, setFile] = useState<Asset>();
 
   // Convert the ID to an asset

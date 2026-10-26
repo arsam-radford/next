@@ -12,7 +12,8 @@ import { Box, Button, Input, useDisclosure } from '@chakra-ui/react';
 import { EnterBoardModal, apiUrls, isElectron, useAppStore } from '@sage3/frontend';
 import { Board } from '@sage3/shared/types';
 
-import { BoardLinkApp } from './index';
+import { state as AppState } from './index';
+import { App } from '../../schema';
 import { AppWindow } from '../../components';
 
 import { OtherServerCard } from './components/OtherServerCard';
@@ -21,7 +22,7 @@ import { MdDashboard } from 'react-icons/md';
 
 /* App component for BoardLink */
 
-function AppComponent(props: BoardLinkApp): JSX.Element {
+function AppComponent(props: App<'BoardLink'>): JSX.Element {
   const s = props.data.state;
 
   // Check if this is another server
@@ -36,8 +37,8 @@ function AppComponent(props: BoardLinkApp): JSX.Element {
 
 /* App toolbar component for the app BoardLink */
 
-function ToolbarComponent(props: BoardLinkApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const [board, setBoard] = useState<undefined | Board>(undefined);
 
   const [title, setTitle] = useState('');

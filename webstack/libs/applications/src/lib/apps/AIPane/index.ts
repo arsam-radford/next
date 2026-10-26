@@ -8,8 +8,6 @@
 
 import { z } from 'zod';
 
-export const name = 'AIPane';
-
 export const schema = z.object({
   hostedApps: z.record(z.string(), z.string()),
   runStatus: z.number(),
@@ -30,3 +28,5 @@ export const init: Partial<state> = {
   supportedTasks: {},
   messages: {},
 };
+
+export const name = 'AIPane';

@@ -8,8 +8,6 @@
 
 import { z } from 'zod';
 
-export const name = 'ChartGenerator';
-
 /**
  * SAGE3 application: ChartGenerator
  * created by: RJ
@@ -47,3 +45,5 @@ export const init: Partial<state> = {
   labelName: '',
   fontSizeMultiplier: 15,
 };
+
+export const name = 'ChartGenerator';

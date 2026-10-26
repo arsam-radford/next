@@ -36,7 +36,8 @@ import {
 } from '@sage3/frontend';
 import { KernelInfo } from '@sage3/shared/types';
 
-import { SageCellApp, state as AppState } from '../index';
+import { App, AppGroup } from '../../../schema';
+import { state as AppState } from '../index';
 import { HelpModal } from './help';
 import { useStore } from './store';
 import { VscRunAbove, VscRunAll, VscRunBelow } from 'react-icons/vsc';
@@ -47,7 +48,7 @@ import { VscRunAbove, VscRunAll, VscRunBelow } from 'react-icons/vsc';
  * @param {App} props
  * @returns {JSX.Element}
  */
-export function ToolbarComponent(props: SageCellApp): JSX.Element {
+export function ToolbarComponent(props: App): JSX.Element {
   // Abilties
   const canExecuteCode = useAbility('execute', 'kernels');
   // Store between toolbar and appWindow
@@ -55,7 +56,7 @@ export function ToolbarComponent(props: SageCellApp): JSX.Element {
   const setExecuteAll = useStore((state) => state.setExecuteAll);
   const setInterrupt = useStore((state) => state.setInterrupt);
   // App State
-  const s = props.data.state;
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
   // Abilities
   const canCreateKernels = useAbility('create', 'kernels');
@@ -369,7 +370,7 @@ export function ToolbarComponent(props: SageCellApp): JSX.Element {
  * Grouped App toolbar component, this component will display when a group of apps are selected
  * @returns JSX.Element | null
  */
-export const GroupedToolbarComponent = (props: { apps: SageCellApp[] }) => {
+export const GroupedToolbarComponent = (props: { apps: AppGroup<'SageCell'> }) => {
   // Disclousre for the create kernel modal
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -453,7 +454,8 @@ export const GroupedToolbarComponent = (props: { apps: SageCellApp[] }) => {
   // Execute the app without any checks, used for sequential execution
   async function executeAppNoChecks(appid: string, userid: string) {
     // Get the code from the store
-    const code = useAppStore.getState().apps.find((app) => app._id === appid)?.data.state.code;
+    const app = useAppStore.getState().apps.find((app) => app._id === appid);
+    const code = app?.data.type === 'SageCell' ? app.data.state.code : undefined;
     // Get the kernel from the store, since function executed from monaco editor
     const kernel = useStore.getState().kernel[appid];
     if (kernel && code) {

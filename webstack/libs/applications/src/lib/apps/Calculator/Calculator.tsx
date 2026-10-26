@@ -29,11 +29,12 @@ import { MdList, MdCopyAll, MdBackspace, MdDelete } from 'react-icons/md';
 
 import { useAppStore, useUIStore } from '@sage3/frontend';
 
-import { CalculatorApp } from './index';
+import { App } from '../../schema';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 
-function AppComponent(props: CalculatorApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
   const update = useAppStore((state) => state.update);
 
@@ -195,8 +196,8 @@ function AppComponent(props: CalculatorApp): JSX.Element {
   );
 }
 
-function ToolbarComponent(props: CalculatorApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
 
   // UI for calculation history

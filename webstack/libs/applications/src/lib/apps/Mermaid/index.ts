@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'Mermaid';
 
 /**
  * SAGE3 application: Mermaid
@@ -27,4 +24,4 @@ export const init: Partial<state> = {
   assetid: '',
 };
 
-export type MermaidApp = App<typeof name>;
+export const name = 'Mermaid';

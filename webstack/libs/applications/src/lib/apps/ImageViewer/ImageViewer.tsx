@@ -16,7 +16,8 @@ import { HiPencilAlt } from 'react-icons/hi';
 import { useThrottleScale, useAssetStore, useAppStore, useMeasure, downloadFile, downloadViaProxy, isUUIDv4, apiUrls, useUIStore } from '@sage3/frontend';
 import { Asset, ExtraImageType, ImageInfoType } from '@sage3/shared/types';
 
-import { ImageViewerApp } from './index';
+import { App } from '../../schema';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 
 /**
@@ -25,8 +26,8 @@ import { AppWindow } from '../../components';
  * @param {App} props
  * @returns {JSX.Element}
  */
-function AppComponent(props: ImageViewerApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const assets = useAssetStore((state) => state.assets);
   const update = useAppStore((state) => state.update);
 
@@ -181,8 +182,8 @@ function AppComponent(props: ImageViewerApp): JSX.Element {
  * @param {App} props
  * @returns {JSX.Element}
  */
-function ToolbarComponent(props: ImageViewerApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
   const assets = useAssetStore((state) => state.assets);
   const [file, setFile] = useState<Asset>();

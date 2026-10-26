@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'IFrame';
 
 /**
  * SAGE3 application: IFrame
@@ -27,4 +24,4 @@ export const init: Partial<state> = {
   doc: '',
 };
 
-export type IFrameApp = App<typeof name>;
+export const name = 'IFrame';

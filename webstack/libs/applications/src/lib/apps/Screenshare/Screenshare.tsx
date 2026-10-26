@@ -14,7 +14,8 @@ import { Box, Button, ButtonGroup, Text, Tooltip, useToast, ToastId } from '@cha
 import { useAppStore, useUser, useScreenshareStore, useHexColor, useUIStore, apiUrls } from '@sage3/frontend';
 
 // App
-import { ScreenshareApp } from './index';
+import { App } from '../../schema';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 import { MdScreenShare, MdSpeed } from 'react-icons/md';
 import { create } from 'zustand';
@@ -42,8 +43,8 @@ const useStatsStore = create<StatsStore>()((set) => ({
  * round-trip. The session holding the capture is the owner; a reloaded page
  * cannot resume a share, and the server deletes the app when its track is gone.
  */
-function AppComponent(props: ScreenshareApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
 
   // Screenshare Store (LiveKit)
   const tracks = useScreenshareStore((state) => state.tracks);
@@ -312,7 +313,7 @@ function AppComponent(props: ScreenshareApp): JSX.Element {
 
 /* App toolbar component for the app Screenshare */
 
-function ToolbarComponent(props: ScreenshareApp): JSX.Element {
+function ToolbarComponent(props: App): JSX.Element {
   // Current User
   const { user } = useUser();
   const yours = user?._id === props._createdBy;

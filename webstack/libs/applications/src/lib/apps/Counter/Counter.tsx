@@ -8,8 +8,9 @@
 
 import { useAppStore } from '@sage3/frontend';
 import { Box, Button, ButtonGroup, Text, Tooltip } from '@chakra-ui/react';
+import { App } from '../../schema';
 
-import { state as AppState, CounterApp } from './index';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
 import { MdAdd, MdRefresh, MdRemove } from 'react-icons/md';
 
@@ -23,8 +24,8 @@ function sub(update: UpdateFunc, s: AppState, id: string) {
   update(id, { count: s.count - 1 });
 }
 
-function AppComponent(props: CounterApp): JSX.Element {
-  const s = props.data.state;
+function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
 
   return (
     <AppWindow app={props}>
@@ -35,8 +36,8 @@ function AppComponent(props: CounterApp): JSX.Element {
   );
 }
 
-function ToolbarComponent(props: CounterApp): JSX.Element {
-  const s = props.data.state;
+function ToolbarComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
 
   const updateState = useAppStore((state) => state.updateState);
 

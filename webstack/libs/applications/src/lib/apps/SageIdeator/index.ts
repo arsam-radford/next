@@ -7,9 +7,6 @@
  */
 
 import { z } from 'zod';
-import type { App } from '../../schema';
-
-export const name = 'SageIdeator';
 
 /**
  * SAGE3 application: SageIdeator
@@ -102,4 +99,4 @@ export const init: Partial<state> = {
   chatHistory: [],
 };
 
-export type SageIdeatorApp = App<typeof name>;
+export const name = 'SageIdeator';

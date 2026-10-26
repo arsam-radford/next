@@ -14,16 +14,17 @@ import { useAssetStore, useAppStore, useUser, apiUrls } from '@sage3/frontend';
 import { Asset } from '@sage3/shared/types';
 
 
-import { DeepZoomImageApp } from './index';
+import { state as AppState } from './index';
 import { AppWindow } from '../../components';
+import { App } from '../../schema';
 
 /* App component for DeepZoomImage */
 
-function AppComponent(props: DeepZoomImageApp): JSX.Element {
+function AppComponent(props: App): JSX.Element {
   const updateState = useAppStore((state) => state.updateState);
   const update = useAppStore((state) => state.update);
   const assets = useAssetStore((state) => state.assets);
-  const s = props.data.state;
+  const s = props.data.state as AppState;
   // file from the asset manager
   const [file, setFile] = useState<Asset>();
   // Keep handle to the viewer

@@ -8,8 +8,6 @@
 
 import { string, z } from 'zod';
 import { EChartsOption } from 'echarts';
-
-export const name = 'EChartsViewer';
 export const EChartsOptionType: z.ZodType<EChartsOption> = z.object({});
 /**
  * SAGE3 application: EChartsViewer
@@ -64,3 +62,5 @@ export const init: Partial<state> = {
     ],
   },
 };
+
+export const name = 'EChartsViewer';
