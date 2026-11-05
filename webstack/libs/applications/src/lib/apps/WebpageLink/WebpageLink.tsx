@@ -420,6 +420,7 @@ function ToolbarComponent(props: App): JSX.Element {
         fd.append('files', codefile);
         // Add fields to the upload form
         fd.append('room', roomId);
+        fd.append('board', props.data.boardId);
         // Upload with a POST request
         fetch(apiUrls.assets.upload, { method: 'POST', body: fd })
           .catch((error: Error) => {

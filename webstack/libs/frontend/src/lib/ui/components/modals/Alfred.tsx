@@ -47,7 +47,6 @@ import {
   MdMic,
   MdStop,
 } from 'react-icons/md';
-import { v5 as uuidv5 } from 'uuid';
 
 import {
   processContentURL,
@@ -58,6 +57,7 @@ import {
   useAssetStore,
   useUsersStore,
   useConfigStore,
+  sessionAssets,
   useThrottleApps,
   useInsightStore,
   setupAppForFile,
@@ -168,27 +168,14 @@ export function Alfred(props: props) {
     });
   };
 
-  const saveBoard = (name: string) => {
+  const saveBoard = async (name: string) => {
     const selectedapps = useUIStore.getState().savedSelectedAppsIds;
     // Use selected apps if any or all apps
     const apps =
       selectedapps.length > 0 ? useAppStore.getState().apps.filter((a) => selectedapps.includes(a._id)) : useAppStore.getState().apps;
     let filename = name || 'board.s3json';
     if (!filename.endsWith('.s3json')) filename += '.s3json';
-    const namespace = useConfigStore.getState().config.namespace;
-    const assets = apps.reduce<{ id: string; url: string; filename: string }[]>(function (arr, app) {
-      const state = app.data.state;
-      if ('assetid' in state && state.assetid) {
-        // Generate a public URL of the file
-        const token = uuidv5(state.assetid, namespace);
-        const publicURL = apiUrls.assets.getPublicURL(state.assetid, token);
-        const asset = useAssetStore.getState().assets.find((a) => a._id === state.assetid);
-        if (asset) {
-          arr.push({ id: state.assetid, url: window.location.origin + publicURL, filename: asset.data.originalfilename });
-        }
-      }
-      return arr;
-    }, []);
+    const assets = await sessionAssets(apps, useAssetStore.getState().assets);
     // Data structure to save
     const savedapps = apps.map((app) => {
       // making sure apps have the right state

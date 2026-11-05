@@ -26,9 +26,9 @@ const SCREENSHARE_TYPE = 'LocalScreenshare';
  * @param roomId The LiveKit roomId (a SAGE3 board id) the user is attempting to join
  * @returns The signed JWT
  */
-export function generateLiveKitToken(apiKey: string, apiSecret: string, identity: string, roomId: string): Promise<string> {
+export function generateLiveKitToken(apiKey: string, apiSecret: string, identity: string, roomId: string, canPublish = true): Promise<string> {
   const token = new AccessToken(apiKey, apiSecret, { identity });
-  token.addGrant({ roomJoin: true, room: roomId, canPublish: true, canSubscribe: true });
+  token.addGrant({ roomJoin: true, room: roomId, canPublish, canSubscribe: true });
   return token.toJwt();
 }
 
@@ -67,8 +67,8 @@ export class SAGELiveKit {
   /**
    * Generate a LiveKit room join token for the given identity for the given roomId
    */
-  public generateVideoToken(identity: string, roomId: string): Promise<string> {
-    return generateLiveKitToken(this.apiKey, this.apiSecret, identity, roomId);
+  public generateVideoToken(identity: string, roomId: string, canPublish = true): Promise<string> {
+    return generateLiveKitToken(this.apiKey, this.apiSecret, identity, roomId, canPublish);
   }
 
   /**

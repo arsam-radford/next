@@ -11,7 +11,7 @@ import { Box, Button, Divider, IconButton, Input, Progress, Text, useColorModeVa
 import { MdAdd, MdEdit, MdRemove, MdSave } from 'react-icons/md';
 
 import { PollOption } from '../index';
-import { ConfirmModal, useAppStore } from '@sage3/frontend';
+import { ConfirmModal, useAppStore, useUser } from '@sage3/frontend';
 import { usePollsStore } from '../stores/pollStore';
 
 interface PollProps {
@@ -20,14 +20,15 @@ interface PollProps {
   options: PollOption[];
   updatePollQuestion: (newQuestion: string) => void;
   addNewOption: (newOption: string) => void;
-  onUpVote: (optionId: string) => void;
-  onDownVote: (optionId: string) => void;
+  onVote: (optionId: string) => void;
 }
 
-export const PollView: React.FC<PollProps> = ({ _id, question, options, updatePollQuestion, onUpVote, onDownVote, addNewOption }) => {
+export const PollView: React.FC<PollProps> = ({ _id, question, options, updatePollQuestion, onVote, addNewOption }) => {
+  const { user } = useUser();
   const [editMode, setEditMode] = useState(false);
   const [editedQuestion, setEditedQuestion] = useState(question);
-  const [votes, setVotes] = useState<Record<string, boolean>>({});
+  // The server records who voted for what.
+  const voted = (option: PollOption) => !!user && !!option.voters?.includes(user._id);
   const [newOption, setNewOption] = useState<string>('');
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -44,15 +45,6 @@ export const PollView: React.FC<PollProps> = ({ _id, question, options, updatePo
     onClose();
   };
 
-  const handleVote = (optionId: string) => {
-    onUpVote(optionId);
-    setVotes((prev) => ({ ...prev, [optionId]: true }));
-  };
-
-  const removeVote = (optionId: string) => {
-    onDownVote(optionId);
-    setVotes((prev) => ({ ...prev, [optionId]: false }));
-  };
 
   const handleQuestionEdit = () => {
     if (editMode && editedQuestion !== question) {
@@ -112,14 +104,14 @@ export const PollView: React.FC<PollProps> = ({ _id, question, options, updatePo
         {options.map((option) => (
           <Box display="flex" key={option.id} pt="1" pb="2" borderRadius="md" alignItems="center" gap="1">
             <Box mx={2}>
-              {!votes[option.id] ? (
-                <IconButton icon={<MdAdd />} variant="solid" colorScheme="blue" onClick={() => handleVote(option.id)} aria-label="vote" />
+              {!voted(option) ? (
+                <IconButton icon={<MdAdd />} variant="solid" colorScheme="blue" onClick={() => onVote(option.id)} aria-label="vote" />
               ) : (
                 <IconButton
                   icon={<MdRemove />}
                   variant="solid"
                   colorScheme="red"
-                  onClick={() => removeVote(option.id)}
+                  onClick={() => onVote(option.id)}
                   aria-label="undo-vote"
                 />
               )}

@@ -31,17 +31,6 @@ export const usePollsStore = function (updateStore: (state: PollData | null) => 
         poll = { ...poll, options: [...poll.options, newOption] };
         updateStore(poll);
       },
-      vote(poll: PollData, optionId: string, direction: number = 1): void {
-        const targetIndex = poll.options.findIndex((option) => option.id === optionId);
-        if (targetIndex === -1) {
-          throw new Error('Option does not exist ');
-        }
-        const votes = poll.options[targetIndex].votes;
-        const newOptions = [...poll.options];
-        newOptions[targetIndex].votes += votes <= 0 ? 1 : direction;
-        poll = { ...poll, options: newOptions };
-        updateStore(poll);
-      },
     };
   }, [updateStore]);
 };

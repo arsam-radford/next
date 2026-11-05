@@ -12,6 +12,8 @@ on:
 
 env:
   SERVER: production
+  # Forks without Apple credentials still build; macOS only auto-updates signed apps.
+  SIGNING: ${{ secrets.LUC_DEV_CERTIFICATE != '' }}
 
 defaults:
   run:
@@ -39,6 +41,7 @@ jobs:
           rm -fr SAGE3-darwin-x64/SAGE3.app/Contents/Resources/app/node_modules/electron-winstaller*
           rm -fr SAGE3-darwin-x64/SAGE3.app/Contents/Resources/app/node_modules/appdmg
       - name: Sign
+        if: env.SIGNING == 'true'
         env:
           MACOS_CERTIFICATE: ${{ secrets.LUC_DEV_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.LUC_DEV_CERTIFICATE_PASS }}

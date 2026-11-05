@@ -46,12 +46,14 @@ import { LuChevronsUpDown } from 'react-icons/lu';
 
 // SAGE Imports
 import { Board, PresencePartial, Room } from '@sage3/shared/types';
-import { SAGE3Ability, generateReadableID, fuzzySearch } from '@sage3/shared';
+import { generateReadableID, fuzzySearch, has, Permission } from '@sage3/shared';
 import {
   JoinBoardCheck,
   useBoardStore,
   usePresenceStore,
   useRoomStore,
+  useAccount,
+  useRoomPermissions,
   useUsersStore,
   useUser,
   usePluginStore,
@@ -62,6 +64,9 @@ import {
   CreateBoardModal,
   EnterBoardByURLModal,
   EditRoomModal,
+  RoomSettingsModal,
+  ViewAsBanner,
+  useBoardPermissionsIn,
   EditBoardModal,
   ConfirmModal,
   Clock,
@@ -214,6 +219,7 @@ export function HomePage() {
   const { isOpen: createBoardModalIsOpen, onOpen: createBoardModalOnOpen, onClose: createBoardModalOnClose } = useDisclosure();
   const { isOpen: enterBoardByURLModalIsOpen, onOpen: enterBoardByURLModalOnOpen, onClose: enterBoardByURLModalOnClose } = useDisclosure();
   const { isOpen: editRoomModalIsOpen, onOpen: editRoomModalOnOpen, onClose: editRoomModalOnClose } = useDisclosure();
+  const { isOpen: roomSettingsIsOpen, onOpen: roomSettingsOnOpen, onClose: roomSettingsOnClose } = useDisclosure();
   const { isOpen: editBoardModalIsOpen, onOpen: editBoardModalOnOpen, onClose: editBoardModalOnClose } = useDisclosure();
   const { isOpen: roomSearchModal, onOpen: roomSearchModalOnOpen, onClose: roomSearchModalOnClose } = useDisclosure();
   const { isOpen: leaveRoomModalIsOpen, onOpen: leaveRoomModalOnOpen, onClose: leaveRoomModalOnClose } = useDisclosure();
@@ -225,9 +231,14 @@ export function HomePage() {
   } = useDisclosure();
 
   // Permissions
-  const canJoin = SAGE3Ability.canCurrentUser('join', 'roommembers');
-  const canCreateRoom = SAGE3Ability.canCurrentUser('create', 'rooms');
-  const canCreateBoards = SAGE3Ability.canCurrentUser('create', 'boards');
+  const account = useAccount();
+  const canJoin = true;
+  const canCreateRoom = account.createRooms;
+  const roomPermissions = useRoomPermissions(selectedRoom?._id ?? '');
+  const canCreateBoards = has(roomPermissions, Permission.ManageBoards);
+  const canManageRoom = has(roomPermissions, Permission.ManageRoom);
+  // Boards the user (or, while previewing, the previewed roles) can see
+  const boardPermissionsIn = useBoardPermissionsIn(selectedRoom?._id);
 
   // Refs
   const homeRef = useRef<HTMLDivElement>(null);
@@ -246,50 +257,28 @@ export function HomePage() {
   // Filter Functions
   const roomMemberFilter = (room: Room): boolean => {
     if (!user) return false;
-    const roomMembership = members.find((m) => m.data.roomId === room._id);
-    const isMember = roomMembership && roomMembership.data.members ? roomMembership.data.members.includes(userId) : false;
+    const isMember = members.some((m) => m.data.roomId === room._id && m.data.userId === userId);
     const isOwner = room.data.ownerId === userId;
     return isMember || isOwner;
   };
 
   const boardActiveFilter = (board: Board): boolean => {
-    const roomMembership = members.find((m) => m.data.roomId === board.data.roomId);
     const userCount = (presenceByBoard.get(board._id) ?? []).length;
-
-    // As a guest or spectator, check
-    if (user?.data.userRole === 'guest' || user?.data.userRole === 'spectator') {
-      const recentAndStarred = new Set([...recentBoards, ...savedBoards]);
-      const isRecentOrStarred = recentAndStarred.has(board._id);
-      return isRecentOrStarred && userCount > 0;
-    }
-
-    const isMember = roomMembership && roomMembership.data.members ? roomMembership.data.members.includes(userId) : false;
+    const isMember = members.some((m) => m.data.roomId === board.data.roomId && m.data.userId === userId);
     return isMember && userCount > 0;
   };
 
   const boardStarredFilter = (board: Board): boolean => {
     const isSaved = savedBoards.includes(board._id);
 
-    // As a guest or spectator, don't need to filter memberships. Just return cached boards.
-    if (user?.data.userRole === 'guest' || user?.data.userRole === 'spectator') {
-      return isSaved;
-    }
-
-    const roomMembership = members.find((m) => m.data.roomId === board.data.roomId);
-    const isMember = roomMembership && roomMembership.data.members ? roomMembership.data.members.includes(userId) : false;
+    const isMember = members.some((m) => m.data.roomId === board.data.roomId && m.data.userId === userId);
     return isSaved && isMember;
   };
 
   const recentBoardsFilter = (board: Board): boolean => {
     const isRecent = recentBoards.includes(board._id);
 
-    // As a guest or spectator, don't need to filter memberships. Just return cached boards.
-    if (user?.data.userRole === 'guest' || user?.data.userRole === 'spectator') {
-      return isRecent;
-    }
-
-    const roomMembership = members.find((m) => m.data.roomId === board.data.roomId);
-    const isMember = roomMembership && roomMembership.data.members ? roomMembership.data.members.includes(userId) : false;
+    const isMember = members.some((m) => m.data.roomId === board.data.roomId && m.data.userId === userId);
     return isRecent && isMember;
   };
 
@@ -312,22 +301,12 @@ export function HomePage() {
     }
 
     const ids = new Set<string>();
-    const isGuestLike = user?.data.userRole === 'guest' || user?.data.userRole === 'spectator';
-    const recentOrStarred = new Set([...recentBoards, ...savedBoards]);
 
     boards.forEach((board) => {
-      const roomMembership = members.find((m) => m.data.roomId === board.data.roomId);
-      const isMember = roomMembership && roomMembership.data.members ? roomMembership.data.members.includes(userId) : false;
+      const isMember = members.some((m) => m.data.roomId === board.data.roomId && m.data.userId === userId);
       const isRecent = recentBoards.includes(board._id);
       const isSaved = savedBoards.includes(board._id);
       const userCount = (presenceByBoard.get(board._id) ?? []).length;
-
-      if (isGuestLike) {
-        if (isRecent || isSaved || (recentOrStarred.has(board._id) && userCount > 0)) {
-          ids.add(board._id);
-        }
-        return;
-      }
 
       if (isMember && (isRecent || isSaved || userCount > 0)) {
         ids.add(board._id);
@@ -335,7 +314,7 @@ export function HomePage() {
     });
 
     return [...ids];
-  }, [selectedRoom?._id, boards, members, recentBoards, savedBoards, presenceByBoard, user?.data.userRole, userId]);
+  }, [selectedRoom?._id, boards, members, recentBoards, savedBoards, presenceByBoard, userId]);
 
   const { boardPreviews, previewsLoading, refreshPreviews } = useBoardPreviews(apiUrls.boards.preview, previewBoardIds);
 
@@ -347,17 +326,9 @@ export function HomePage() {
   useEffect(() => {
     if (roomsFetched) {
       rooms.forEach((room) => {
-        const roomMembership = members.find((m) => m.data.roomId === room._id);
-        const isOwner = room.data.ownerId === userId;
-
-        // If the user is the owner and room has no member yet, join the room
-        if (isOwner && !roomMembership) {
-          joinRoomMembership(room._id);
-        }
-
-        // Is the user a member but just hasn't joined yet?
-        const isMember = roomMembership && roomMembership.data.members ? roomMembership.data.members.includes(userId) : false;
-        if (isOwner && !isMember) {
+        // The owner of a room is always a member of it.
+        const isMember = members.some((m) => m.data.roomId === room._id && m.data.userId === userId);
+        if (room.data.ownerId === userId && !isMember) {
           joinRoomMembership(room._id);
         }
       });
@@ -637,8 +608,7 @@ export function HomePage() {
   useEffect(() => {
     // Check if is still a member of the room
     if (selectedRoom) {
-      const roomMembership = members.find((m) => m.data.roomId === selectedRoom._id);
-      const isMember = roomMembership && roomMembership.data.members ? roomMembership.data.members.includes(userId) : false;
+      const isMember = members.some((m) => m.data.roomId === selectedRoom._id && m.data.userId === userId);
       if (!isMember) {
         setSelectedRoom(undefined);
         setSelectedBoard(undefined);
@@ -670,6 +640,8 @@ export function HomePage() {
           onClose={editRoomModalOnClose}
         ></EditRoomModal>
       )}
+      <ViewAsBanner />
+      {selectedRoom && roomSettingsIsOpen && <RoomSettingsModal isOpen={roomSettingsIsOpen} onClose={roomSettingsOnClose} room={selectedRoom} />}
       {/* Modal to edit board */}
       {selectedBoard && (
         <EditBoardModal
@@ -802,7 +774,6 @@ export function HomePage() {
                 alignItems="center"
                 mb="2"
                 pr="3"
-                hidden={user?.data.userRole === 'spectator' || user?.data.userRole === 'guest'}
               >
                 <Box pl="4" fontSize="md" fontWeight="bold">
                   Rooms
@@ -848,7 +819,6 @@ export function HomePage() {
                     borderRadius: '48px',
                   },
                 }}
-                hidden={user?.data.userRole === 'spectator' || user?.data.userRole === 'guest'}
               >
                 <Box height="60%" mr="2" ml="1">
                   {rooms
@@ -962,27 +932,23 @@ export function HomePage() {
                     <Text fontSize="xs" color={useColorModeValue('gray.600', 'gray.400')}>
                       Members:{' '}
                       {(() => {
-                        const roomMembership = members.find((m) => m.data.roomId === selectedRoom._id);
-                        return roomMembership && roomMembership.data.members ? roomMembership.data.members.length : 0;
+                        return members.filter((m) => m.data.roomId === selectedRoom._id).length;
                       })()}
                     </Text>
                   </Box>
                   <Tooltip
-                    label={
-                      selectedRoom.data.ownerId === userId ? `Update the room's settings` : 'Only the owner can update the room settings'
-                    }
+                    label={canManageRoom ? `Update the room's settings` : 'Changing the room settings needs Manage Room'}
                     openDelay={400}
                     hasArrow
                     placement="right"
                   >
-                    <MenuItem
-                      icon={<Icon as={MdSettings} fontSize="18px" />}
-                      isDisabled={selectedRoom.data.ownerId !== userId}
-                      onClick={editRoomModalOnOpen}
-                    >
+                    <MenuItem icon={<Icon as={MdSettings} fontSize="18px" />} isDisabled={!canManageRoom} onClick={editRoomModalOnOpen}>
                       Settings
                     </MenuItem>
                   </Tooltip>
+                  <MenuItem icon={<Icon as={MdPeople} fontSize="18px" />} onClick={roomSettingsOnOpen}>
+                    Roles and Members
+                  </MenuItem>
                   <Tooltip
                     label={selectedRoom.data.ownerId === userId ? 'Owners cannot leave their own room.' : 'Leave this room'}
                     openDelay={400}
@@ -1032,7 +998,7 @@ export function HomePage() {
                     {/* key={selectedRoom?._id} remounts the panel on room change, resetting search state */}
                     <BoardListPanel
                       key={selectedRoom?._id}
-                      boards={boards}
+                      boards={boards.filter((b) => has(boardPermissionsIn(b), Permission.ViewBoard))}
                       selectedRoom={selectedRoom}
                       selectedBoard={selectedBoard}
                       presenceByBoard={presenceByBoard}

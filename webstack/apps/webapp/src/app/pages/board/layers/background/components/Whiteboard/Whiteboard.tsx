@@ -21,6 +21,7 @@ Can't select and move lines/shapes
 <--------------------------------------------------------------------------------------------TODO-------------------------------------------------------------------------------------------->
 */
 
+import { Permission } from '@sage3/shared';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Simplify from 'simplify-js';
 
@@ -30,7 +31,7 @@ import * as Y from 'yjs';
 // SAGE Imports
 import {
   YjsRoomConnection,
-  useAbility,
+  useCan,
   useAnnotationStore,
   useHotkeys,
   useThrottleScale,
@@ -245,7 +246,7 @@ export function Whiteboard(props: WhiteboardProps) {
   const scale = useThrottleScale(250);
 
   // Ability: whether the current user can annotate this board
-  const canAnnotate = useAbility('update', 'boards');
+  const canAnnotate = useCan(Permission.Annotate);
 
   // UI Store state
   const contextMenuOpen = useUIStore((state) => state.contextMenuOpen);

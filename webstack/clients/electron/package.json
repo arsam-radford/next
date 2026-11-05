@@ -1,12 +1,12 @@
 {
   "name": "SAGE3",
-  "version": "1.0.68",
+  "version": "1.0.69",
   "description": "Electron-based SAGE3 client",
   "main": "electron.js",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SAGE-3/next"
+    "url": "https://github.com/arsam-radford/next"
   },
   "dependencies": {
     "@braintree/sanitize-url": "^7.1.2",

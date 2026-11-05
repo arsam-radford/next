@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { SBDoc } from './SBSchema';
+import { OverrideSchema } from '../../permissions/permissions';
 
 /**
  * @typedef {object} BoardSchema
@@ -24,9 +25,10 @@ const schema = z.object({
   roomId: z.string(),
   // The id of the owner of the room
   ownerId: z.string(),
-  // Is the board password protected?
-  isPrivate: z.boolean(),
-  privatePin: z.string(),
+  // Per role and per member permission adjustments on this board
+  overrides: z.array(OverrideSchema),
+  // Named snapshots belong to this board only; older boards need no migration.
+  permissionPresets: z.array(z.object({ id: z.string(), name: z.string(), overrides: z.array(OverrideSchema) })).optional(),
   // Code for the room
   code: z.string(),
   // The lines on the board

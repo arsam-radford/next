@@ -17,7 +17,8 @@
 import express from 'express';
 // Node modules
 import * as path from 'path';
-import { v5 as uuidv5 } from 'uuid';
+import { timingSafeEqual } from 'node:crypto';
+import { fileToken } from '@sage3/backend/permissions';
 import { Readable } from 'node:stream';
 
 // Get server configuration
@@ -71,9 +72,10 @@ export function FilesRouter(): express.Router {
     // Get the asset
     const data = await AssetsCollection.get(params.id);
     // Calculate the uuid v5 from asset id and namespace (from config)
-    const key = uuidv5(params.id, config.namespace);
-    // if it matches the passed token, send the file
-    if (data && key === params.token) {
+    // The server issues tokens after checking the right to download, so a matching token is the permission.
+    const key = Buffer.from(fileToken(params.id));
+    const token = Buffer.from(String(params.token));
+    if (data && key.length === token.length && timingSafeEqual(key, token)) {
       res.status(200).download(path.resolve(data.data.path), data.data.originalfilename);
     } else {
       res.status(500).send({ success: false });

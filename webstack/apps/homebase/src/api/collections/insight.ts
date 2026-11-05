@@ -7,7 +7,9 @@
  */
 
 import { InsightSchema } from '@sage3/shared/types';
-import { SAGE3Collection, sageRouter } from '@sage3/backend';
+import { SAGE3Collection, sageRouter, boardPermissionsOf } from '@sage3/backend';
+import { has, Permission as P } from '@sage3/shared';
+import { deny, needOnBoard, refuse } from './access';
 import { AppsCollection } from './apps';
 
 class SAGE3InsightCollection extends SAGE3Collection<InsightSchema> {
@@ -15,6 +17,16 @@ class SAGE3InsightCollection extends SAGE3Collection<InsightSchema> {
     super('INSIGHT', {
       boardId: '', // index to query
     });
+    // One document per app, created and deleted with the app.
+    this.access = {
+      create: refuse,
+      read: async (auth, doc) => has(await boardPermissionsOf(auth, doc.data.boardId), P.ViewBoard),
+      update: async (auth, doc, update) => {
+        if (Object.keys(update).some((key) => key !== 'labels')) deny();
+        await needOnBoard(auth, doc.data.boardId, P.EditOwnApps);
+      },
+      delete: refuse,
+    };
     const router = sageRouter<InsightSchema>(this);
     this.httpRouter = router;
   }

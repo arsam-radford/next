@@ -6,23 +6,16 @@
  * the file LICENSE, distributed as part of this software.
  */
 
-// NPM imports
-import express from 'express';
+// Server side of the permission system: resolves who is asking and what they may do
+// in a room or on a board. The calculation itself lives in @sage3/shared.
 
-// SAGEBase Imports
-import { SBAuthSchema } from '@sage3/sagebase';
+import { createHmac } from 'node:crypto';
+import { SAGEBase, SBAuthSchema, SBCollectionRef, SBDocument } from '@sage3/sagebase';
+import { ALL, Account, accountFor, AppAccess, applyAppOverrides, boardBase, finishPermissions, has, MemberAccess, roomPermissions } from '@sage3/shared';
+import { BoardSchema, memberId, RoomMembersSchema, RoomSchema } from '@sage3/shared/types';
 
-// SAGEAbility Check
-import { SAGE3Ability, RoleArg, ActionArg, ResourceArg } from '@sage3/shared';
-
-export type AuthAction = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'SUB' | 'UNSUB';
-
-export type AuthSubject = 'USERS' | 'ASSETS' | 'APPS' | 'BOARDS' | 'ROOMS' | 'PRESENCE' | 'MESSAGE' | 'PLUGINS' | 'ANNOTATIONS' | 'LINKS';
-
-// Map provider to role
-// This is a temporary solution until we have a better way to handle roles
-// To check the actual user we would have to query the database
-const providerToRoleMap = {
+// Instance role per login provider. LDAP resolves its own role at login.
+const providerRoles: Record<string, string> = {
   admin: 'admin',
   cilogon: 'user',
   google: 'user',
@@ -34,92 +27,133 @@ const providerToRoleMap = {
   guest: 'guest',
 };
 
-// Providers that resolve a role dynamically at login time (LDAP group→role
-// mapping) and persist it on the auth record — see LDAPAdapter.resolveRole
-// and SBAuthDatabase's role field. Every other provider is only ever
-// resolved via the coarse map above. Scoping this explicitly (rather than
-// trusting any auth.role that happens to be set) means a stray/forged role
-// field on a different provider's record can't grant elevated access.
-const PROVIDERS_WITH_DYNAMIC_ROLE = ['ldap'];
-
-// Conversion to RoleArg. Prefers the role resolved by the provider itself
-// (e.g. LDAP group mapping) over the coarse per-provider default, so that
-// e.g. an LDAP group mapped to "spectator" actually grants read-only access
-// instead of the provider-wide default of "user".
-const convertProviderToRole = (auth: SBAuthSchema): RoleArg | undefined => {
-  if (auth.role && PROVIDERS_WITH_DYNAMIC_ROLE.includes(auth.provider)) {
-    return auth.role as RoleArg;
-  }
-  const role = providerToRoleMap[auth.provider as keyof typeof providerToRoleMap] as RoleArg;
-  return role;
-};
-
-// Map method to action
-const methodToActionMap = {
-  POST: 'create',
-  GET: 'read',
-  PUT: 'update',
-  DELETE: 'delete',
-  SUB: 'sub',
-  UNSUB: 'unsub',
-};
-
-// Conversion to ActionArg
-const convertMethodToAction = (method: string): ActionArg => {
-  const action = methodToActionMap[method as keyof typeof methodToActionMap] as ActionArg;
-  return action;
-};
-
-type Middleware = (req: express.Request, res: express.Response, next: express.NextFunction) => void;
-export type AuthMiddleware = (act: AuthAction, subj: AuthSubject) => Middleware;
-
-/**
- * Middleware to check if the user has permission to access the route.
- *
- * @export
- * @param {...string[]} permittedRoles
- * @returns
- */
-export function checkPermissionsREST(subj: AuthSubject): Middleware {
-  // return a middleware
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    // user is already logged in
-    const auth = req.user as SBAuthSchema;
-    // Get Role
-    const role = convertProviderToRole(auth);
-    if (!role) {
-      // `return false;` here previously did neither — Middleware's return
-      // type is void, so this was a silent no-op: no next(), no response.
-      // Any auth record with a provider missing from providerToRoleMap
-      // (e.g. a provider added without updating the map) made the request
-      // hang forever. Respond the same way an unauthorized role does.
-      res.status(403).json({ message: 'Forbidden user' });
-      return;
-    }
-    // Convert Method to Action
-    const action = convertMethodToAction(req.method as AuthAction);
-    // Convert Subject to Resource
-    const resource = subj.toLowerCase() as ResourceArg;
-    if (SAGE3Ability.can(role, action, resource)) {
-      // role is allowed, so continue on the next middleware
-      next();
-    } else {
-      // user is forbidden
-      res.status(403).json({ message: 'Forbidden user' });
-    }
-  };
+export function instanceRole(auth: SBAuthSchema): string | undefined {
+  if (auth.email && admins.includes(auth.email)) return 'admin';
+  if (auth.provider === 'ldap' && auth.role) return auth.role;
+  return providerRoles[auth.provider];
 }
 
-export function checkPermissionsWS(auth: SBAuthSchema, act: AuthAction, subj: AuthSubject): boolean {
-  // Get Role
-  const role = convertProviderToRole(auth);
-  if (!role) return false;
-  // Convert Method to Action
-  const action = convertMethodToAction(act);
-  // Convert Subject to Resource
-  const resource = subj.toLowerCase() as ResourceArg;
+let admins: string[] = [];
+let secret = '';
+let restrictRoomCreation = false;
+let rooms: SBCollectionRef<RoomSchema>;
+let boards: SBCollectionRef<BoardSchema>;
+let members: SBCollectionRef<RoomMembersSchema>;
 
-  //  Check permissions for ws
-  const perm = SAGE3Ability.can(role, action, resource);
-  return perm;
+// Computed permissions per `${userId} ${roomId} ` and `${userId}  ${boardId}`. Cleared whenever a room,
+// board or membership changes, so a change applies to the next check.
+// Each entry holds a result before timeouts and caps, and the membership it came from, so a timeout
+// that ends, or an app's own overrides, apply at use without recomputing.
+type Entry = { base: number; member?: MemberAccess };
+const memo = new Map<string, Entry>();
+let epoch = 0;
+
+/**
+ * Connect to the room, board and membership collections. Call once per server, after SAGEBase.init.
+ */
+export async function initPermissions(options: { admins: string[]; restrictRoomCreation: boolean; secret: string }): Promise<void> {
+  admins = options.admins;
+  secret = options.secret;
+  restrictRoomCreation = options.restrictRoomCreation;
+  rooms = await SAGEBase.Database.collection<RoomSchema>('ROOMS');
+  boards = await SAGEBase.Database.collection<BoardSchema>('BOARDS');
+  members = await SAGEBase.Database.collection<RoomMembersSchema>('ROOMMEMBERS');
+  const invalidate = () => {
+    epoch++;
+    memo.clear();
+  };
+  await rooms.subscribe(invalidate);
+  await boards.subscribe(invalidate);
+  await members.subscribe(invalidate);
+}
+
+/**
+ * The token of a file's public share link. Only the server can make one, so links come from a permission check.
+ */
+export function fileToken(assetId: string): string {
+  return createHmac('sha256', secret).update(assetId).digest('hex');
+}
+
+export function accountOf(auth: SBAuthSchema): Account {
+  return accountFor(auth.id, instanceRole(auth), restrictRoomCreation);
+}
+
+export function readRoom(roomId: string): Promise<SBDocument<RoomSchema> | undefined> {
+  return rooms.docRef(roomId).read();
+}
+
+export function readBoard(boardId: string): Promise<SBDocument<BoardSchema> | undefined> {
+  return boards.docRef(boardId).read();
+}
+
+export function readMember(roomId: string, userId: string): Promise<SBDocument<RoomMembersSchema> | undefined> {
+  return members.docRef(memberId(roomId, userId)).read();
+}
+
+/**
+ * Room permissions of the requester. 0 when the room does not exist.
+ */
+export async function roomPermissionsOf(auth: SBAuthSchema, roomId: string): Promise<number> {
+  const { base } = await remember(`${auth.id} ${roomId} `, async () => {
+    const [room, member] = await Promise.all([readRoom(roomId), readMember(roomId, auth.id)]);
+    return { base: room ? roomPermissions(room.data, member?.data, accountOf(auth)) : 0 };
+  });
+  return base;
+}
+
+// The board's result before timeouts and caps. Pass the board's data to check a board that was just deleted.
+function boardEntry(auth: SBAuthSchema, boardId: string, known?: BoardSchema): Promise<Entry> {
+  return remember(`${auth.id}  ${boardId}`, async () => {
+    const board = known ?? (await readBoard(boardId))?.data;
+    if (!board) return { base: 0 };
+    const [room, member] = await Promise.all([readRoom(board.roomId), readMember(board.roomId, auth.id)]);
+    if (!room) return { base: 0 };
+    return { base: boardBase(room.data, board, member?.data, accountOf(auth)), member: member?.data };
+  });
+}
+
+/**
+ * Board permissions of the requester, in the board's room. 0 when the board does not exist.
+ */
+export async function boardPermissionsOf(auth: SBAuthSchema, boardId: string, known?: BoardSchema): Promise<number> {
+  const { base, member } = await boardEntry(auth, boardId, known);
+  return finishPermissions(base, member, accountOf(auth), Date.now());
+}
+
+/**
+ * Permissions on one app: its board's, adjusted by the app's own overrides.
+ */
+export async function appPermissionsOf(auth: SBAuthSchema, app: { boardId: string } & AppAccess): Promise<number> {
+  const { base, member } = await boardEntry(auth, app.boardId);
+  const p = member && base !== ALL ? applyAppOverrides(base, app, member.roles) : base;
+  return finishPermissions(p, member, accountOf(auth), Date.now());
+}
+
+/**
+ * Whether the requester is a member of the room, or its owner or an instance administrator.
+ */
+export async function inRoom(auth: SBAuthSchema, roomId: string): Promise<boolean> {
+  const { base } = await remember(`${auth.id} ${roomId} member`, async () => {
+    const [room, member] = await Promise.all([readRoom(roomId), readMember(roomId, auth.id)]);
+    return { base: room && (member || room.data.ownerId === auth.id || accountOf(auth).instanceAdmin) ? 1 : 0 };
+  });
+  return base === 1;
+}
+
+export async function canInRoom(auth: SBAuthSchema, roomId: string, permission: number): Promise<boolean> {
+  return has(await roomPermissionsOf(auth, roomId), permission);
+}
+
+export async function canOnBoard(auth: SBAuthSchema, boardId: string, permission: number): Promise<boolean> {
+  return has(await boardPermissionsOf(auth, boardId), permission);
+}
+
+async function remember(key: string, compute: () => Promise<Entry>): Promise<Entry> {
+  const known = memo.get(key);
+  if (known) return known;
+  const started = epoch;
+  const entry = await compute();
+  // A change during the computation may have made it stale.
+  if (epoch === started) memo.set(key, entry);
+  return entry;
 }

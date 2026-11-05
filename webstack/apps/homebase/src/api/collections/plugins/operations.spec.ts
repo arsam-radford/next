@@ -12,9 +12,24 @@ jest.mock('../apps', () => ({
     get: jest.fn(),
     add: jest.fn(),
     query: jest.fn(),
+    // Spectators may not change apps; everyone else here may.
+    access: {
+      update: async (auth: { provider: string }) => {
+        if (auth.provider === 'spectator') throw new Error('Permission denied.');
+      },
+      delete: async (auth: { provider: string }) => {
+        if (auth.provider === 'spectator') throw new Error('Permission denied.');
+      },
+    },
   },
 }));
-jest.mock('../assets', () => ({ AssetsCollection: { get: jest.fn(), query: jest.fn() } }));
+jest.mock('../assets', () => ({ AssetsCollection: { get: jest.fn(), query: jest.fn(), readAs: async (_user: unknown, docs: unknown) => docs } }));
+// Spectators are read-only; everyone else here holds every permission on the board.
+jest.mock('@sage3/backend/permissions', () => {
+  const { ALL, READ_ONLY_KEEPS } = jest.requireActual('@sage3/shared');
+  const of = async (auth: { provider: string }) => (auth.provider === 'spectator' ? READ_ONLY_KEEPS : ALL);
+  return { boardPermissionsOf: of, appPermissionsOf: of };
+});
 jest.mock('../boards', () => ({ BoardsCollection: { get: jest.fn() } }));
 jest.mock('../rooms', () => ({ RoomsCollection: { get: jest.fn() } }));
 jest.mock('../link', () => ({ LinkCollection: { add: jest.fn(), get: jest.fn(), query: jest.fn() } }));
@@ -86,6 +101,7 @@ const asset: Asset = {
     file: 'document.pdf',
     owner: 'owner',
     room: 'room',
+    board: '',
     originalfilename: 'document.pdf',
     path: '',
     dateCreated: '0',
@@ -146,6 +162,8 @@ it('requires the current grant, loaded digest, capability and user permission', 
     'Capability not approved',
   );
 
+  // The app exists, so the refusal comes from the app's permissions.
+  jest.mocked(AppsCollection.get).mockResolvedValueOnce(app);
   await expect(
     performPluginOperation(
       collection,

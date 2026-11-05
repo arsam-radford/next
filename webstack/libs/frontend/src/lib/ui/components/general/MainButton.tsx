@@ -6,6 +6,7 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+import { isPrivateBoard } from '@sage3/shared';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 
@@ -56,7 +57,7 @@ import {
   useBoardStore,
   EnterBoardModal,
   useHexColor,
-  useAbility,
+  useAccount,
   useConfigStore,
   HelpModal,
   Alfred,
@@ -92,7 +93,7 @@ export function MainButton(props: MainButtonProps) {
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
 
   // Abilities
-  const canUpdateAccount = useAbility('update', 'users');
+  const canUpdateAccount = !useAccount().readOnly;
 
   const { logout } = useAuth();
   const { toggleColorMode, colorMode } = useColorMode();
@@ -334,11 +335,11 @@ export function MainButton(props: MainButtonProps) {
                                 fontSize="lg"
                                 variant="unstlyed"
                                 pointerEvents="none"
-                                color={board.data.isPrivate ? lockColor : unlockColor}
+                                color={isPrivateBoard(board.data) ? lockColor : unlockColor}
                                 m="0"
                                 p="0"
                                 _hover={{ cursor: 'initial' }}
-                                icon={board.data.isPrivate ? <MdLock /> : <MdLockOpen />}
+                                icon={isPrivateBoard(board.data) ? <MdLock /> : <MdLockOpen />}
                               />
                               {board.data.name}
                             </Box>

@@ -6,11 +6,12 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+import { Permission } from '@sage3/shared';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Box } from '@chakra-ui/react';
 
-import { useUIStore, useAbility, WheelStepZoom, MinZoom, MaxZoom, useUserSettings } from '@sage3/frontend';
+import { useUIStore, useCan, WheelStepZoom, MinZoom, MaxZoom, useUserSettings } from '@sage3/frontend';
 import { Background, Apps, Whiteboard, Lasso, PresenceComponent, Links, CursorArrow, LinkerMode } from './components';
 
 type BackgroundLayerProps = {
@@ -20,7 +21,7 @@ type BackgroundLayerProps = {
 
 export function BackgroundLayer(props: BackgroundLayerProps) {
   // Abilities
-  const canLasso = useAbility('lasso', 'apps');
+  const canLasso = useCan(Permission.ArrangeOwnApps);
 
   // Settings
   const { settings } = useUserSettings();

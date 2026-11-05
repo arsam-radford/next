@@ -8,6 +8,7 @@
 
 import { SBDocumentMessage, SBJSON } from '@sage3/sagebase';
 import { genId } from '@sage3/shared';
+import { blockedByPreview, previewRefusal } from '../preview';
 import { APIClientWSMessage } from '@sage3/shared/types';
 import { CollectionDocs } from '../index';
 
@@ -56,6 +57,7 @@ class SocketAPISingleton {
     method: Exclude<APIClientWSMessage['method'], 'SUB' | 'UNSUB'>,
     body?: Record<string, unknown> | { batch: Record<string, unknown> | string[] }
   ): Promise<any> {
+    if (method !== 'GET' && blockedByPreview(route)) return previewRefusal;
     await this.init();
     const message = {
       id: genId(),

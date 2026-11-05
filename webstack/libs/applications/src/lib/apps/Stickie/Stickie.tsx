@@ -10,7 +10,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router';
 import { Box, Button, ButtonGroup, Tooltip, useColorModeValue, useToast, useDisclosure } from '@chakra-ui/react';
-import { MdRemove, MdAdd, MdFileDownload, MdCloudUpload, MdLock, MdLockOpen, MdStickyNote2 } from 'react-icons/md';
+import { MdRemove, MdAdd, MdFileDownload, MdCloudUpload, MdStickyNote2 } from 'react-icons/md';
 
 // Date manipulation (for filename)
 import { format } from 'date-fns/format';
@@ -30,8 +30,9 @@ import {
   useYjs,
   serverTime,
   YjsRoomConnection,
+  useAppPermissions,
 } from '@sage3/frontend';
-import { SAGEColors } from '@sage3/shared';
+import { appPermission, has, SAGEColors } from '@sage3/shared';
 import { InsightSchema } from '@sage3/shared/types';
 
 import { state as AppState } from './';
@@ -87,6 +88,8 @@ function AppComponent(props: App): JSX.Element {
 
   const { user } = useUser();
   const { boardId, roomId } = useParams();
+  // Read only for people who may not edit this note (a locked note, for instance)
+  const locked = !has(useAppPermissions(props), appPermission('Edit', user?._id === props._createdBy));
   // Update functions from the store
   const updateState = useAppStore((state) => state.updateState);
   const createApp = useAppStore((state) => state.create);
@@ -100,7 +103,7 @@ function AppComponent(props: App): JSX.Element {
   const editorParent = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const undoRef = useRef<Y.UndoManager | null>(null);
-  // The lock, changed without rebuilding the editor
+  // Read only or not, changed without rebuilding the editor
   const lockCompartment = useRef(new Compartment());
   // Font size: this will be updated as the text or size of the sticky changes
   const [fontSize, setFontSize] = useState(s.fontSize);
@@ -314,7 +317,7 @@ function AppComponent(props: App): JSX.Element {
           ),
           remoteCursors,
           markdownLivePreview(),
-          lockCompartment.current.of(readOnly(s.lock)),
+          lockCompartment.current.of(readOnly(locked)),
           placeholder('Type here...'),
           stickieTheme,
           EditorView.lineWrapping,
@@ -344,10 +347,10 @@ function AppComponent(props: App): JSX.Element {
     if (!selected && view?.hasFocus) view.contentDOM.blur();
   }, [selected]);
 
-  // Locking and unlocking, without rebuilding the editor
+  // Permission changes, without rebuilding the editor
   useEffect(() => {
-    viewRef.current?.dispatch({ effects: lockCompartment.current.reconfigure(readOnly(s.lock)) });
-  }, [s.lock]);
+    viewRef.current?.dispatch({ effects: lockCompartment.current.reconfigure(readOnly(locked)) });
+  }, [locked]);
 
   // The plain view's lines (the text as the editor shows it without the focus)
   const lines = useMemo(() => (editing ? [] : renderMarkdownLines(text)), [editing, text]);
@@ -433,14 +436,14 @@ function ToolbarComponent(props: App): JSX.Element {
   const users = useUsersStore((state) => state.users);
   const { user } = useUser();
   // Room and board
-  const { roomId } = useParams();
+  const { roomId, boardId } = useParams();
   // Save Confirmation  Modal
   const { isOpen: saveIsOpen, onOpen: saveOnOpen, onClose: saveOnClose } = useDisclosure();
   // Display some notifications
   const toast = useToast();
 
   const yours = user?._id === props._createdBy;
-  const locked = s.lock;
+  const locked = !has(useAppPermissions(props), appPermission('Edit', yours));
 
   const fontSizeBackground = useColorModeValue('teal.500', 'teal.200');
   const fontSizeColor = useColorModeValue('white', 'black');
@@ -501,6 +504,7 @@ function ToolbarComponent(props: App): JSX.Element {
         fd.append('files', codefile);
         // Add fields to the upload form
         fd.append('room', roomId);
+        fd.append('board', boardId ?? '');
         // Upload with a POST request
         fetch(apiUrls.assets.upload, { method: 'POST', body: fd })
           .catch((error: Error) => {
@@ -535,10 +539,6 @@ function ToolbarComponent(props: App): JSX.Element {
     updateTags(props._id, oldcolor + ':' + oldcolor, color + ':' + color);
   };
 
-  const lockUnlock = () => {
-    updateState(props._id, { lock: !locked });
-  };
-
   return (
     <>
       <ButtonGroup isAttached size="xs" colorScheme="teal" mr="1">
@@ -558,13 +558,6 @@ function ToolbarComponent(props: App): JSX.Element {
           </Button>
         </Tooltip>
       </ButtonGroup>
-      {yours && (
-        <Tooltip placement="top" hasArrow={true} label={`${locked ? 'Unlock' : 'Lock'} Stickie`} openDelay={400}>
-          <Button onClick={lockUnlock} colorScheme="teal" size="xs" mx={1} px={0}>
-            {locked ? <MdLock size="16px" /> : <MdLockOpen size="16px" />}
-          </Button>
-        </Tooltip>
-      )}
       <ColorPicker onChange={handleColorChange} selectedColor={s.color as SAGEColors} size="xs" disabled={locked} />
 
       <ButtonGroup isAttached size="xs" colorScheme="teal" mx={1}>
@@ -671,7 +664,6 @@ const GroupedToolbarComponent = (props: { apps: AppGroup<'Stickie'> }) => {
     const bi: Array<{ id: string; updates: Partial<InsightSchema> }> = [];
     // Iterate through all the selected apps
     props.apps.forEach((app) => {
-      if (app.data.state.lock) return;
       bi.push({ id: app._id, updates: { labels: getSet(app._id, app.data.state.color, color) } });
       ba.push({ id: app._id, updates: { color: color } });
     });
@@ -684,7 +676,6 @@ const GroupedToolbarComponent = (props: { apps: AppGroup<'Stickie'> }) => {
     // Array of update to batch at once
     const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
     props.apps.forEach((app) => {
-      if (app.data.state.lock) return;
       const size = app.data.state.fontSize + 8;
       if (size > 128) return;
       ps.push({ id: app._id, updates: { fontSize: size } });
@@ -697,7 +688,6 @@ const GroupedToolbarComponent = (props: { apps: AppGroup<'Stickie'> }) => {
     // Array of update to batch at once
     const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
     props.apps.forEach((app) => {
-      if (app.data.state.lock) return;
       const size = app.data.state.fontSize - 8;
       if (size <= 8) return;
       ps.push({ id: app._id, updates: { fontSize: size } });
@@ -711,30 +701,7 @@ const GroupedToolbarComponent = (props: { apps: AppGroup<'Stickie'> }) => {
     // Array of update to batch at once
     const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
     props.apps.forEach((app) => {
-      if (app.data.state.lock) return;
       ps.push({ id: app._id, updates: { fontSize: min } });
-    });
-    // Update all the apps at once
-    updateStateBatch(ps);
-  };
-
-  const handleLock = () => {
-    // Array of update to batch at once
-    const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
-    props.apps.forEach((app) => {
-      if (app._createdBy !== user?._id) return;
-      ps.push({ id: app._id, updates: { lock: true } });
-    });
-    // Update all the apps at once
-    updateStateBatch(ps);
-  };
-
-  const handleUnlock = () => {
-    // Array of update to batch at once
-    const ps: Array<{ id: string; updates: Partial<AppState> }> = [];
-    props.apps.forEach((app) => {
-      if (app._createdBy !== user?._id) return;
-      ps.push({ id: app._id, updates: { lock: false } });
     });
     // Update all the apps at once
     updateStateBatch(ps);
@@ -758,19 +725,6 @@ const GroupedToolbarComponent = (props: { apps: AppGroup<'Stickie'> }) => {
         </Tooltip>
       </ButtonGroup>
 
-      <ButtonGroup isAttached size="xs" colorScheme="teal" mx={1}>
-        <Tooltip placement="top" hasArrow={true} label={'Lock Stickies'} openDelay={400}>
-          <Button onClick={() => handleLock()} size="xs" px={0}>
-            <MdLock size="16px" />
-          </Button>
-        </Tooltip>
-
-        <Tooltip placement="top" hasArrow={true} label={'Unlock Stickies'} openDelay={400}>
-          <Button onClick={() => handleUnlock()} size="xs" px={0}>
-            <MdLockOpen size="16px" />
-          </Button>
-        </Tooltip>
-      </ButtonGroup>
       <ColorPicker
         onChange={handleColorChange}
         selectedColor={props.apps[0].data.state.color as SAGEColors}

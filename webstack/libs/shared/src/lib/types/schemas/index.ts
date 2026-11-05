@@ -20,3 +20,5 @@ export * from './roommembers';
 export * from './insight';
 export * from './annotation';
 export * from './link';
+export * from './invite';
+export * from './audit';

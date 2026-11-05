@@ -11,6 +11,7 @@ import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { useParams } from 'react-router';
 import { useUser } from './useUser';
+import { previewing, useViewAsStore } from '../stores/viewAs';
 import { User } from '@sage3/shared/types';
 import { LoadingScreen } from '@sage3/frontend';
 
@@ -80,6 +81,16 @@ async function connectToRoom(room: string, user: User): Promise<YjsRoomConnectio
     // Once connected resolve the promise
     provider.on('status', (event: any) => {
       if (event.status === 'connected') {
+        // While previewing as a role, edits stay local; exiting the preview reconnects fresh documents.
+        const ws = provider.ws;
+        if (ws) {
+          const send = ws.send.bind(ws);
+          ws.send = (data) => {
+            const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+            if (previewing() && bytes[0] === 0 && (bytes[1] === 1 || bytes[1] === 2)) return;
+            send(data);
+          };
+        }
         resolve({ doc, provider });
       }
     });
@@ -93,6 +104,7 @@ export function YjsProvider(props: React.PropsWithChildren<Record<string, unknow
   const [yApps, setAppRoom] = useState<YjsRoomConnection | null>(null);
   const { boardId } = useParams();
   const { user } = useUser();
+  const viewing = useViewAsStore((state) => state.viewAs !== null);
 
   const nullConnections = () => {
     setAnnotationRoom(null);
@@ -145,7 +157,7 @@ export function YjsProvider(props: React.PropsWithChildren<Record<string, unknow
     return () => {
       disconnectAll();
     };
-  }, [boardId, disconnectAll]);
+  }, [boardId, disconnectAll, viewing]);
 
   return (
     <YjsContext.Provider value={{ yAnnotations, yApps }}>

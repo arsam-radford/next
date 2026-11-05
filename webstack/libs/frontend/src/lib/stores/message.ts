@@ -13,7 +13,6 @@ import { mountStoreDevtool } from 'simple-zustand-devtools';
 
 // Application specific schema
 import { Message, MessageSchema } from '@sage3/shared/types';
-import { SAGE3Ability } from '@sage3/shared';
 
 // The observable websocket
 import { APIHttp, SocketAPI } from '../api';
@@ -44,14 +43,12 @@ const MessageStore = create<MessageState>()((set, get) => {
       set({ error: null });
     },
     create: async (newMsg: MessageSchema) => {
-      if (!SAGE3Ability.canCurrentUser('create', 'message')) return;
       const res = await SocketAPI.sendRESTMessage(`/message/`, 'POST', newMsg);
       if (!res.success) {
         set({ error: res.message });
       }
     },
     delete: async (id: string) => {
-      if (!SAGE3Ability.canCurrentUser('delete', 'message')) return;
       const res = await SocketAPI.sendRESTMessage(`/message/${id}`, 'DELETE');
       if (!res.success) {
         set({ error: res.message });
@@ -68,7 +65,6 @@ const MessageStore = create<MessageState>()((set, get) => {
       set({ interval: null });
     },
     subscribe: async () => {
-      if (!SAGE3Ability.canCurrentUser('read', 'message')) return;
       if (msgSub) {
         msgSub();
         msgSub = null;

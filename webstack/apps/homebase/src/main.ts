@@ -47,7 +47,8 @@ import { APIClientWSMessage, ServerConfiguration, isLiveKitEnabled, isTwilioEnab
 import { SBAuthDB, JWTPayload } from '@sage3/sagebase';
 
 // SAGE Twilio Helper Import
-import { SAGETwilio, SAGELiveKit } from '@sage3/backend';
+import { SAGETwilio, SAGELiveKit, boardPermissionsOf, initPermissions } from '@sage3/backend';
+import { has, Permission } from '@sage3/shared';
 import express from 'express';
 
 // Exception handling
@@ -108,6 +109,7 @@ async function startServer() {
   await SAGEBase.init(sbConfig, app);
 
   // Load all the models: user, board, ...
+  await initPermissions({ admins: config.auth.admins ?? [], restrictRoomCreation: !!config.features.restrictRoomCreation, secret: config.auth.sessionSecret });
   await loadCollections();
 
   // Screenshare Setup.
@@ -119,7 +121,7 @@ async function startServer() {
   // Twilio (legacy, for servers that have not migrated to the self-hosted SFU)
   if (isTwilioEnabled(config.services)) {
     const twilio = new SAGETwilio(config.services.twilio, AppsCollection, PresenceCollection, 10000, screenShareTimeLimit);
-    app.get('/twilio/token', createRateLimiter(60), SAGEBase.Auth.authenticate, (req, res) => {
+    app.get('/twilio/token', createRateLimiter(60), SAGEBase.Auth.authenticate, async (req, res) => {
       const authId = req.user.id;
       if (authId === undefined) {
         res.status(403).send();
@@ -127,6 +129,11 @@ async function startServer() {
       }
       const room = req.query.room as string;
       const identity = req.query.identity as string;
+      // Twilio rooms are boards.
+      if (!has(await boardPermissionsOf(req.user, room), Permission.ViewBoard)) {
+        res.status(403).send();
+        return;
+      }
       const token = twilio.generateVideoToken(identity, room);
       res.send({ token });
     });
@@ -150,7 +157,13 @@ async function startServer() {
         return;
       }
       try {
-        const token = await livekit.generateVideoToken(`${authId}--${accessId}`, room);
+        // LiveKit rooms are boards: watching needs View Board, sharing needs Screenshare.
+        const permissions = await boardPermissionsOf(req.user, room);
+        if (!has(permissions, Permission.ViewBoard)) {
+          res.status(403).send();
+          return;
+        }
+        const token = await livekit.generateVideoToken(`${authId}--${accessId}`, room, has(permissions, Permission.Screenshare));
         // No url: the SFU is always this deployment's own, reached at /sfu on this host
         res.send({ token, shareTimeLimit: screenShareTimeLimit });
       } catch (error) {

@@ -6,8 +6,9 @@
  * the file LICENSE, distributed as part of this software.
  */
 
-import { UserSchema } from '@sage3/shared/types';
-import { SAGE3Collection, sageRouter } from '@sage3/backend';
+import { UserRole, UserSchema } from '@sage3/shared/types';
+import { SAGE3Collection, sageRouter, accountOf, instanceRole } from '@sage3/backend';
+import { deny, refuse } from './access';
 
 import { SAGEBase, SBAuthSchema, createRateLimiter } from '@sage3/sagebase';
 
@@ -36,13 +37,26 @@ class SAGE3UsersCollection extends SAGE3Collection<UserSchema> {
       userRole: 'user',
     });
 
+    // Everyone can see users. Each user changes only their own document, and never their role.
+    this.access = {
+      create: refuse,
+      read: async () => true,
+      update: async (auth, doc, update) => {
+        if (doc._id !== auth.id || 'userRole' in update) deny();
+      },
+      delete: async (auth) => {
+        if (!accountOf(auth).instanceAdmin) deny();
+      },
+    };
     const router = sageRouter<UserSchema>(this);
 
     router.post('/create', async ({ body, user }, res) => {
       let doc = null;
       const id = (user as any).id;
       if (user) {
-        doc = await this.add(body, id, id);
+        // The role comes from the login, not from the client.
+        const userRole = (instanceRole(user as SBAuthSchema) ?? 'guest') as UserRole;
+        doc = await this.add({ ...body, userRole }, id, id);
       }
       if (doc) res.status(200).send({ success: true, data: [doc] });
       else res.status(500).send({ success: false, message: 'Failed to create user.' });
@@ -126,12 +140,7 @@ class SAGE3UsersCollection extends SAGE3Collection<UserSchema> {
       }
 
       // Check if the user who is requesting the deletion is an admin
-      let isAdmin = false;
-      const userPerformingDeletion = await this.get(userRequestingDeletion.id);
-      const userEmailPerformingDeletion = userPerformingDeletion ? userPerformingDeletion.data.email : null;
-      if (userEmailPerformingDeletion) {
-        isAdmin = adminEmails.includes(userEmailPerformingDeletion);
-      }
+      const isAdmin = accountOf(userRequestingDeletion).instanceAdmin;
 
       // Only admins or the user themselves can delete their account
       if (!isAdmin && !isSameUser) {
@@ -178,7 +187,7 @@ class SAGE3UsersCollection extends SAGE3Collection<UserSchema> {
         const roomsTransfer = await RoomsCollection.transferUsersRooms(userIdToDelete, adminId);
         // For each room, join the room as a member
         roomsTransfer.forEach((roomId) => {
-          RoomMembersCollection.addMember(roomId, adminId);
+          RoomMembersCollection.addMember(roomId, adminId, []);
         });
 
         // Transfer Boards

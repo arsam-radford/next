@@ -2,6 +2,7 @@
 
 import { ServerConfiguration } from '@sage3/shared/types';
 import expressAPIRouter from './api/router';
+import { initPermissions } from '@sage3/backend/permissions';
 
 import express from 'express';
 import * as dns from 'node:dns';
@@ -107,6 +108,7 @@ async function startServer() {
     },
   };
   await SAGEBase.init(sbConfig, app);
+  await initPermissions({ admins: config.auth.admins ?? [], restrictRoomCreation: !!config.features.restrictRoomCreation, secret: config.auth.sessionSecret });
 
   const router = await expressAPIRouter();
   // Load the API Routes

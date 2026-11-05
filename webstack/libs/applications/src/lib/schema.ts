@@ -8,6 +8,7 @@
 
 // import and re-export all the apps
 import { Position, Rotation, SBDoc, Size } from '@sage3/shared/types';
+import type { Override } from '@sage3/shared';
 import { AppName, AppState, AppStateMap } from './types';
 export { AppName, AppState, AppStateMap } from './types';
 
@@ -22,6 +23,8 @@ type AppCommon = {
   raised: boolean;
   dragging: boolean;
   pinned: boolean;
+  // Who may interact with, edit, arrange or delete this app, adjusting its board's permissions
+  overrides?: Override[];
   sourceApps?: SBDoc['_id'][];
 };
 

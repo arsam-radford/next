@@ -6,6 +6,7 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+import { isPrivateBoard } from '@sage3/shared';
 import { useColorModeValue, IconButton, Box, Text, useDisclosure, Icon, Tooltip, useToast } from '@chakra-ui/react';
 import { MdLock, MdStar, MdStarOutline, MdSettings, MdLink, MdInfo, MdLockOpen } from 'react-icons/md';
 
@@ -143,7 +144,7 @@ export function BoardRow(props: BoardRowProps) {
           <Tooltip
             placement="top"
             hasArrow={true}
-            isDisabled={!props.board.data.isPrivate}
+            isDisabled={!isPrivateBoard(props.board.data)}
             label={'This room is password protected'}
             openDelay={400}
           >
@@ -152,8 +153,8 @@ export function BoardRow(props: BoardRowProps) {
                 pointerEvents="none"
                 verticalAlign={'text-top'}
                 fontSize="xl"
-                color={props.board.data.isPrivate ? borderColor : grayedOutColor}
-                as={props.board.data.isPrivate ? MdLock : MdLockOpen}
+                color={isPrivateBoard(props.board.data) ? borderColor : grayedOutColor}
+                as={isPrivateBoard(props.board.data) ? MdLock : MdLockOpen}
                 mr="2"
               />
             </Box>

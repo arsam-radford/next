@@ -6,6 +6,7 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+import { Permission } from '@sage3/shared';
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 import {
   Button,
@@ -32,7 +33,7 @@ import {
   useFiles,
   isValidURL,
   setupApp,
-  useAbility,
+  useCan,
   processContentURL,
   useLinkStore,
 } from '@sage3/frontend';
@@ -70,7 +71,7 @@ export const useDragAndDropBoard = (props: useDragAndDropBoardProps) => {
   const { auth } = useAuth();
 
   // Abilities
-  const canDrop = useAbility('upload', 'assets');
+  const canDrop = useCan(Permission.UploadAssets);
 
   const [dropPosition, setDropPosition] = useState({ x: 0, y: 0 });
   const [dropCursor, setDropCursor] = useState({ x: 0, y: 0 });

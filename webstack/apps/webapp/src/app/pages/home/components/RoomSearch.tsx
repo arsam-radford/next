@@ -28,13 +28,12 @@ import {
   useDisclosure,
   useToast,
 } from '@chakra-ui/react';
-import { v5 as uuidv5 } from 'uuid';
 
 // Icons
 import { MdLock, MdSearch } from 'react-icons/md';
 
 // SAGE Imports
-import { useConfigStore, useHexColor, useRoomStore, useUser } from '@sage3/frontend';
+import { useHexColor, useRoomStore, useUser } from '@sage3/frontend';
 import { Room, User } from '@sage3/shared/types';
 
 // Props for the AboutModal
@@ -243,8 +242,7 @@ function RoomRow(props: RoomRowProps) {
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   // Is this user a member of this room?
-  const roomMember = members.find((roomMember) => roomMember.data.roomId === props.room._id);
-  const isMember = roomMember ? roomMember.data.members.includes(userId) : false;
+  const isMember = members.some((member) => member.data.roomId === props.room._id && member.data.userId === userId);
   const isOwner = props.room.data.ownerId === userId;
 
   // Is password protected
@@ -263,14 +261,14 @@ function RoomRow(props: RoomRowProps) {
       onOpen();
     } else {
       // Join Room
-      joinRoomMembership(props.room._id);
-      // Toast
-      toast({
-        title: `You have successfully joined ${props.room.data.name}`,
-        status: 'success',
-        duration: 4 * 1000,
-        isClosable: true,
-      });
+      joinRoomMembership(props.room._id).then((error) =>
+        toast({
+          title: error ?? `You have successfully joined ${props.room.data.name}`,
+          status: error ? 'error' : 'success',
+          duration: 4 * 1000,
+          isClosable: true,
+        })
+      );
     }
   };
 
@@ -365,7 +363,6 @@ type PasswordModalProps = {
 
 export function PasswordJoinRoomModal(props: PasswordModalProps): JSX.Element {
   // Configuration information
-  const config = useConfigStore((state) => state.config);
   // Reference to the input field
   const initialRef = useRef<HTMLInputElement>(null);
 
@@ -381,16 +378,11 @@ export function PasswordJoinRoomModal(props: PasswordModalProps): JSX.Element {
   // Room Store
   const joinRoomMembership = useRoomStore((state) => state.joinRoomMembership);
 
-  // Checks if the user entered pin matches the board pin
+  // Join with the invite code; the server checks it
   const compareKey = async () => {
     if (!privateText) return;
-    // Feature of UUID v5: private key to 'sign' a string
-    // Hash the PIN: the namespace comes from the server configuration
-    const key = uuidv5(privateText, config.namespace);
-
-    // compare the hashed keys
-    if (key === props.room.data.privatePin) {
-      joinRoomMembership(props.room._id);
+    const error = await joinRoomMembership(props.room._id, privateText.trim());
+    if (!error) {
       toast({
         title: `You have successfully joined ${props.room.data.name}`,
         status: 'success',
@@ -400,7 +392,7 @@ export function PasswordJoinRoomModal(props: PasswordModalProps): JSX.Element {
       handleOnClose();
     } else {
       toast({
-        title: `The password you have entered is incorrect`,
+        title: error,
         status: 'error',
         duration: 4 * 1000,
         isClosable: true,
@@ -441,16 +433,16 @@ export function PasswordJoinRoomModal(props: PasswordModalProps): JSX.Element {
         >
           <Box display="flex" alignItems="center" gap={3}>
             <MdLock size={20} />
-            {props.room.data.name} is Password Protected
+            Joining {props.room.data.name} needs an invite
           </Box>
         </ModalHeader>
         <ModalBody py={6}>
           <Box mb={4} color={useColorModeValue('gray.600', 'gray.300')} fontSize="sm">
-            Enter the password to join this room
+            Enter the invite code you were given
           </Box>
           <InputGroup>
             <InputLeftAddon
-              children="Password"
+              children="Invite code"
               bg={useColorModeValue('gray.100', 'gray.600')}
               borderColor={useColorModeValue('gray.200', 'gray.600')}
             />
@@ -459,7 +451,6 @@ export function PasswordJoinRoomModal(props: PasswordModalProps): JSX.Element {
               ref={initialRef}
               width="full"
               value={privateText}
-              type="password"
               autoComplete="off"
               autoCapitalize="off"
               onChange={updatePrivateText}

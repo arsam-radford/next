@@ -15,6 +15,7 @@ const context = {
   roomId: 'room',
   selectedAppIds: [],
   appOrder: [],
+  permissions: [],
   viewport: { position: { x: 0, y: 0 }, size: { width: 1000, height: 800 }, scale: 1 },
   theme: {
     mode: 'light',

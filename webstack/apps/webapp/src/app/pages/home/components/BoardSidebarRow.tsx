@@ -7,6 +7,7 @@
  */
 
 // Chakra Iports
+import { isPrivateBoard } from '@sage3/shared';
 import { Box, useColorModeValue, Text, Tooltip } from '@chakra-ui/react';
 
 // Icons
@@ -62,7 +63,7 @@ export function BoardSidebarRow(props: { board: Board; isSelected: boolean; onCl
           </Text>
         </Box>
         <Box pr="4" display="flex" alignItems="center">
-          {props.board.data.isPrivate ? <MdLock color={userCountColor}></MdLock> : undefined}
+          {isPrivateBoard(props.board.data) ? <MdLock color={userCountColor}></MdLock> : undefined}
           <Text fontSize="sm" pl="2" color={userCountColor}>
             {userCount}
           </Text>

@@ -19,6 +19,8 @@ import { useAppStore } from './stores/app';
 import { usePluginStore } from './stores/plugin';
 import { useUIStore } from './stores/ui';
 import { usePluginContextStore } from './stores/pluginContext';
+import { useBoardPermissions } from './hooks/usePermissions';
+import { has, Permission, PermissionName } from '@sage3/shared';
 import { useCursorBoardPosition } from './providers/useCursorBoardPosition';
 import { useYjs } from './providers/useYjs';
 import { readPluginAnnotations } from './plugin-annotations';
@@ -155,6 +157,7 @@ export function getPluginContext(boardId: string, roomId: string, appId?: string
     roomId,
     selectedAppIds,
     appOrder: localContext.boardId === boardId ? localContext.appOrder : [],
+    permissions: localContext.permissions.boardId === boardId ? localContext.permissions.names : [],
     viewport: { ...uiState.viewport, scale: uiState.scale },
     theme: getTheme(),
     position: {
@@ -187,6 +190,7 @@ function permittedContext(plugin: EnabledPlugin, context: PluginContext): Plugin
     theme: context.theme,
     selectedAppIds,
     appOrder: canReadApps ? context.appOrder : [],
+    permissions: context.permissions,
     app: canReadApps || ownApp ? context.app : undefined,
     document: canReadDocument ? context.document : undefined,
     position: context.position,
@@ -957,6 +961,11 @@ type BoardPluginRuntimeProps = Readonly<{
 }>;
 
 export function BoardPluginRuntime({ boardId, roomId }: BoardPluginRuntimeProps) {
+  const permissions = useBoardPermissions(boardId);
+  useEffect(() => {
+    const names = (Object.keys(Permission) as PermissionName[]).filter((name) => has(permissions, Permission[name]));
+    usePluginContextStore.getState().setPermissions(boardId, names);
+  }, [boardId, permissions]);
   const plugins = usePluginStore((state) => state.plugins);
   const panel = useExtensionUI((state) => state.panel);
   const menu = useExtensionUI((state) => state.menu);

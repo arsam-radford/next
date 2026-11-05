@@ -54,19 +54,9 @@ function AppComponent(props: App): JSX.Element {
     [pollStore]
   );
 
-  const handleUpVote = useCallback(
-    (optionId: string) => {
-      poll && pollStore.vote(poll, optionId);
-    },
-    [pollStore]
-  );
-
-  const handleDownVote = useCallback(
-    (optionId: string) => {
-      poll && pollStore.vote(poll, optionId, -1);
-    },
-    [pollStore]
-  );
+  // Voting is an action the server runs, so voters need Interact With Apps, not Edit Apps.
+  const act = useAppStore((state) => state.act);
+  const handleVote = useCallback((optionId: string) => act(props._id, 'vote', { optionId }), [act, props._id]);
 
   // Track the width of the app window and set the scale accordingly
   useEffect(() => {
@@ -88,8 +78,7 @@ function AppComponent(props: App): JSX.Element {
               options={poll.options}
               updatePollQuestion={updatePollQuestion}
               addNewOption={handleAddOption}
-              onUpVote={handleUpVote}
-              onDownVote={handleDownVote}
+              onVote={handleVote}
             />
           )}
         </Box>

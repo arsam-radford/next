@@ -2,17 +2,24 @@ import { randomUUID } from 'crypto';
 import { createClient } from 'redis';
 import { SBDocumentRef } from '@sage3/sagebase';
 import type { PluginSchema } from '@sage3/shared/types';
+import { openRoomRoles } from '@sage3/shared';
 import { replacePluginPackage, setPluginActivation } from './approval';
 
 jest.mock('../apps', () => ({ AppsCollection: {} }));
 jest.mock('../assets', () => ({ AssetsCollection: {} }));
 jest.mock('../boards', () => ({ BoardsCollection: {} }));
 jest.mock('../link', () => ({ LinkCollection: {} }));
-jest.mock('../rooms', () => ({
-  RoomsCollection: { get: jest.fn(async () => ({ data: { ownerId: mockRoomOwnerId } })) },
-}));
+// No memberships: only the room owner holds Manage Plugins.
+jest.mock('@sage3/backend/permissions', () => ({ readMember: jest.fn(async () => undefined) }));
 
-const mockRoomOwnerId = 'room-owner';
+const room = {
+  _id: 'room',
+  _createdAt: 0,
+  _createdBy: 'room-owner',
+  _updatedAt: 0,
+  _updatedBy: 'room-owner',
+  data: { name: 'Room', description: '', color: 'red', ownerId: 'room-owner', isPrivate: false, isListed: true, roles: openRoomRoles, bans: [] },
+};
 const original: NonNullable<PluginSchema['package']> = {
   digest: 'a'.repeat(64),
   manifest: {
@@ -69,10 +76,10 @@ integration('owner approval and package publication', () => {
     await setPluginActivation(documents[0], 'board', { enabled: true, packageDigest: original.digest, autoApprove: true }, 'room-owner');
     await setPluginActivation(documents[0], 'manual', { enabled: true, packageDigest: original.digest, autoApprove: false }, 'room-owner');
 
-    const identical = await replacePluginPackage(documents[0], original, 'uploader', mockRoomOwnerId);
+    const identical = await replacePluginPackage(documents[0], original, 'uploader', room);
     expect(identical.data.boardGrants).toEqual({ board: original.digest, manual: original.digest });
 
-    const updated = await replacePluginPackage(documents[1], replacement, 'uploader', mockRoomOwnerId);
+    const updated = await replacePluginPackage(documents[1], replacement, 'uploader', room);
     expect(updated.data.boardGrants).toEqual({ board: replacement.digest });
     expect(updated.data.boardAutoApprovals).toEqual({ board: { ownerId: 'room-owner', capabilities: ['apps.read'] } });
     expect(updated.data.boardState).toEqual({ board: { keep: true } });
@@ -82,7 +89,7 @@ integration('owner approval and package publication', () => {
       digest: 'c'.repeat(64),
       manifest: { ...original.manifest, capabilities: ['apps.read', 'assets.read'] },
     };
-    const blocked = await replacePluginPackage(documents[0], expanded, 'uploader', mockRoomOwnerId);
+    const blocked = await replacePluginPackage(documents[0], expanded, 'uploader', room);
     expect(blocked.data.boardGrants).toEqual({});
     expect(blocked.data.boardAutoApprovals?.board.capabilities).toEqual(['apps.read']);
 
@@ -103,7 +110,7 @@ integration('owner approval and package publication', () => {
     );
     expect(currentOnly.data.boardGrants?.board).toBe(expanded.digest);
     expect(currentOnly.data.boardAutoApprovals?.board).toBeUndefined();
-    expect((await replacePluginPackage(documents[1], replacement, 'uploader', mockRoomOwnerId)).data.boardGrants).toEqual({});
+    expect((await replacePluginPackage(documents[1], replacement, 'uploader', room)).data.boardGrants).toEqual({});
   });
 
   it('keeps a disable and unrelated state changes made after an upload’s read', async () => {
@@ -116,20 +123,20 @@ integration('owner approval and package publication', () => {
       return commit(changes, by, conditions);
     });
 
-    await expect(replacePluginPackage(documents[0], replacement, 'uploader', mockRoomOwnerId)).rejects.toMatchObject({ status: 409 });
+    await expect(replacePluginPackage(documents[0], replacement, 'uploader', room)).rejects.toMatchObject({ status: 409 });
     const current = await documents[0].read();
     expect(current?.data.package).toEqual(original);
     expect(current?.data.boardGrants).toEqual({});
     expect(current?.data.boardAutoApprovals).toEqual({});
     expect(current?.data.boardState?.board).toEqual({ keep: true, concurrent: 'saved' });
-    const later = await replacePluginPackage(documents[1], original, 'uploader', mockRoomOwnerId);
+    const later = await replacePluginPackage(documents[1], original, 'uploader', room);
     expect(later.data.boardGrants).toEqual({});
   });
 
   it('rejects stale consent if package publication wins the atomic write', async () => {
     const commit = documents[0].updateNestedMany.bind(documents[0]);
     jest.spyOn(documents[0], 'updateNestedMany').mockImplementationOnce(async (changes, by, conditions) => {
-      await replacePluginPackage(documents[1], replacement, 'uploader', mockRoomOwnerId);
+      await replacePluginPackage(documents[1], replacement, 'uploader', room);
       return commit(changes, by, conditions);
     });
 

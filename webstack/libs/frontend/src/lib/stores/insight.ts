@@ -13,7 +13,6 @@ import { mountStoreDevtool } from 'simple-zustand-devtools';
 
 // Application specific schema
 import { Insight, InsightSchema } from '@sage3/shared/types';
-import { SAGE3Ability } from '@sage3/shared';
 
 import { APIHttp, SocketAPI } from '../api';
 
@@ -44,14 +43,12 @@ const InsightStore = create<InsightState>()((set, get) => {
       set({ error: null });
     },
     update: async (id: string, updates: Partial<InsightSchema>) => {
-      if (!SAGE3Ability.canCurrentUser('update', 'insight')) return;
       const res = await SocketAPI.sendRESTMessage(`/insight/${id}`, 'PUT', updates);
       if (!res.success) {
         set({ error: res.message });
       }
     },
     updateBatch: async (updates: { id: string; updates: Partial<InsightSchema> }[]) => {
-      if (!SAGE3Ability.canCurrentUser('update', 'insight')) return;
       const res = await SocketAPI.sendRESTMessage('/insight', 'PUT', { batch: updates });
       if (!res.success) {
         set({ error: res.message });
@@ -65,7 +62,6 @@ const InsightStore = create<InsightState>()((set, get) => {
       }
     },
     subscribe: async (boardId: string) => {
-      if (!SAGE3Ability.canCurrentUser('read', 'insight')) return;
       set({ insights: [] });
       const reponse = await APIHttp.QUERY<Insight>('/insight', { boardId });
       if (reponse.success) {

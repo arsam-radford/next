@@ -7,6 +7,7 @@
  */
 
 import { CollectionDocs } from '../index';
+import { blockedByPreview, previewRefusal } from '../preview';
 
 type POSTResponse<T> = {
   success: boolean;
@@ -33,6 +34,7 @@ type DELResponse = {
 };
 
 async function POST<T extends CollectionDocs>(url: string, body: T['data'] | T['data'][]): Promise<POSTResponse<T>> {
+  if (blockedByPreview(url)) return previewRefusal as never;
   try {
     const response = await fetch('/api' + url, {
       method: 'POST',
@@ -109,6 +111,7 @@ async function PUT<T extends CollectionDocs>(
   url: string,
   body: Partial<T['data']> | { id: string; updates: Partial<T['data']> }[],
 ): Promise<PUTResponse<T>> {
+  if (blockedByPreview(url)) return previewRefusal as never;
   try {
     const response = await fetch('/api' + url, {
       method: 'PUT',
@@ -133,6 +136,7 @@ async function PUT<T extends CollectionDocs>(
 }
 
 async function DELETE(url: string, body?: string[]): Promise<DELResponse> {
+  if (blockedByPreview(url)) return previewRefusal as never;
   try {
     const response = await fetch('/api' + url, {
       method: 'DELETE',

@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import type { SBDocumentRef } from '@sage3/sagebase';
-import { pluginPackageDigestSchema, Plugin, PluginSchema } from '@sage3/shared/types';
+import { pluginPackageDigestSchema, Plugin, PluginSchema, RoomSchema } from '@sage3/shared/types';
+import type { SBDocument } from '@sage3/sagebase';
+import { readMember } from '@sage3/backend/permissions';
+import { accountFor, has, Permission, roomPermissions } from '@sage3/shared';
 import { PluginRequestError } from './operations';
-import { RoomsCollection } from '../rooms';
 
 export const pluginActivationSchema = z.discriminatedUnion('enabled', [
   z
@@ -27,7 +29,7 @@ export async function replacePluginPackage(
   document: PluginDocument,
   packaged: PluginPackage,
   by: string,
-  roomOwnerId: string,
+  room: SBDocument<RoomSchema>,
 ): Promise<Plugin> {
   const plugin = await document.read();
   if (!plugin) {
@@ -38,7 +40,8 @@ export async function replacePluginPackage(
   const boardAutoApprovals = { ...plugin.data.boardAutoApprovals };
   for (const boardId in boardAutoApprovals) {
     const policy = boardAutoApprovals[boardId];
-    if (policy.ownerId !== roomOwnerId) {
+    // Trust in future uploads lasts while its approver can still approve plugins.
+    if (!(await holdsManagePlugins(room, policy.ownerId))) {
       delete boardAutoApprovals[boardId];
     } else if (packaged.manifest.capabilities.every((capability) => policy.capabilities.includes(capability))) {
       boardGrants[boardId] = packaged.digest;
@@ -83,15 +86,7 @@ export async function setPluginActivation(
     throw new PluginRequestError('Plugin not found.', 404);
   }
 
-  // pluginScope proved the plugin belongs to a room.
-  const room = await RoomsCollection.get(plugin.data.roomId!);
-  if (!room) {
-    throw new PluginRequestError('Room not found.', 404);
-  }
-  if (room.data.ownerId !== by) {
-    throw new PluginRequestError('Only the room owner can approve extensions.', 403);
-  }
-
+  // The route checked Manage Plugins.
   const packaged = plugin.data.package;
   if (activation.enabled && activation.packageDigest !== packaged?.digest) {
     throw new PluginRequestError('Extension package changed. Reopen approval to review the current package.', 409);
@@ -118,4 +113,9 @@ export async function setPluginActivation(
   }
 
   return result.doc;
+}
+
+async function holdsManagePlugins(room: SBDocument<RoomSchema>, userId: string): Promise<boolean> {
+  const member = await readMember(room._id, userId);
+  return has(roomPermissions(room.data, member?.data, accountFor(userId, undefined)), Permission.ManagePlugins);
 }

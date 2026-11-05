@@ -146,6 +146,7 @@ export function useImageGeneration({ s, localNodes, activeEntryId, appId, boardI
           const fd = new FormData();
           fd.append('files', imgFile);
           fd.append('room', roomId);
+          fd.append('board', boardId);
           const uploadRes = await fetch(apiUrls.assets.upload, { method: 'POST', body: fd, credentials: 'include' });
           if (!uploadRes.ok) {
             toast({ title: 'Upload failed', status: 'warning', duration: 3000, isClosable: true });

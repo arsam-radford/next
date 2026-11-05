@@ -8,6 +8,9 @@
 
 import express from 'express';
 import { config } from '../../../config';
+import { canOnBoard } from '@sage3/backend';
+import { SBAuthSchema } from '@sage3/sagebase';
+import { Permission } from '@sage3/shared';
 
 import {
   SError,
@@ -174,6 +177,10 @@ export function AgentRouter(): express.Router {
     } else if (handler.method === 'POST') {
       router.post(route, async (req, res) => {
         try {
+          // AI costs money, so it needs Use AI on the board the request comes from.
+          if (!(await canOnBoard(req.user as SBAuthSchema, String(req.header('x-sage3-board')), Permission.UseAI))) {
+            return res.status(403).json({ message: 'Using AI needs Use AI on this board.' });
+          }
           const response = await handler.func(req.body);
           return res.json(response);
         } catch (e) {

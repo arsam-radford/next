@@ -7,11 +7,11 @@
  */
 
 import { App } from '@sage3/applications/schema';
-import { Asset, Board, Message, Plugin, Presence, Room, User, Insight, RoomMembers, Annotation, Link } from '@sage3/shared/types';
+import { Asset, Board, Message, Plugin, Presence, Room, User, Insight, RoomMembers, Annotation, Link, Invite, Audit } from '@sage3/shared/types';
 
 export * from './http/index';
 export * from './ws/api-socket';
 export * from './kernels/kernels';
 export * from './seer';
 
-export type CollectionDocs = App | Asset | Board | Message | Plugin | Presence | Room | User | Insight | RoomMembers | Annotation | Link;
+export type CollectionDocs = App | Asset | Board | Message | Plugin | Presence | Room | User | Insight | RoomMembers | Annotation | Link | Invite | Audit;

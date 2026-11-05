@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { SBDoc } from './SBSchema';
+import { RoleSchema } from '../../permissions/permissions';
 
 const schema = z.object({
   // Name of the Room
@@ -18,11 +19,14 @@ const schema = z.object({
   color: z.string(),
   // The ID of the owner of the room
   ownerId: z.string(),
-  // Is the room private or public
+  // Joining needs an invite
   isPrivate: z.boolean(),
-  privatePin: z.string(),
-  // Is the board listed publicly?
+  // Is the room listed publicly?
   isListed: z.boolean(),
+  // Ordered from lowest to highest. roles[0] is @everyone.
+  roles: z.array(RoleSchema),
+  // Users who cannot join
+  bans: z.array(z.string()),
 });
 
 export type RoomSchema = z.infer<typeof schema>;

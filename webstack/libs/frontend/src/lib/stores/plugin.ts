@@ -13,7 +13,6 @@ import { mountStoreDevtool } from 'simple-zustand-devtools';
 
 // Application specific schema
 import { Plugin } from '@sage3/shared/types';
-import { SAGE3Ability } from '@sage3/shared';
 
 // The observable websocket and HTTP
 import { APIHttp, SocketAPI } from '../api';
@@ -88,7 +87,6 @@ const PluginStore = create<PluginState>()((set, get) => {
       set({ error: null });
     },
     delete: async (id: string) => {
-      if (!SAGE3Ability.canCurrentUser('delete', 'plugins')) return;
       await APIHttp.DELETE('/plugins/remove/' + id);
     },
     // Enabling is reachable only from the approval dialog, which passes the reviewed digest.
@@ -111,14 +109,6 @@ const PluginStore = create<PluginState>()((set, get) => {
     },
 
     upload: async (file: File, username: string, roomId: string) => {
-      if (!SAGE3Ability.canCurrentUser('create', 'plugins')) {
-        return {
-          success: false,
-          message: 'You do not have permission to upload plugins.',
-          status: 403,
-        };
-      }
-
       // Uploaded with a Form object
       const formData = new FormData();
       formData.append('plugin', file);
@@ -145,7 +135,6 @@ const PluginStore = create<PluginState>()((set, get) => {
     },
 
     subscribeToPlugins: async () => {
-      if (!SAGE3Ability.canCurrentUser('read', 'plugins')) return;
       set({ ...get(), plugins: [], fetched: false });
 
       const plugins = await APIHttp.GET<Plugin>('/plugins');

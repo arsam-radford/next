@@ -10,6 +10,9 @@ import { Presence } from '@sage3/shared/types';
 import { PresenceCollection } from '../../collections';
 import { WebSocket } from 'ws';
 import { throttle } from 'throttle-debounce';
+import { SBAuthSchema } from '@sage3/sagebase';
+import { boardPermissionsOf } from '@sage3/backend';
+import { has, Permission } from '@sage3/shared';
 
 // Default tick rate is 15 times per second
 const defaultTickRate = 1000 / 15;
@@ -22,7 +25,10 @@ const defaultTickRate = 1000 / 15;
  * This is to prevent the clients from being overloaded with updates
  */
 class PresenceThrottleClass {
-  private _subscriptions: Map<string, WebSocket>;
+  private _subscriptions: Map<string, { socket: WebSocket; user: SBAuthSchema }>;
+  // A send in progress, and whether another was requested meanwhile.
+  private _sending = false;
+  private _pending = false;
   private _tickRate: number;
   private _initialized: boolean;
   private _presences: Presence[];
@@ -89,8 +95,8 @@ class PresenceThrottleClass {
    * @param id Id of the subscription
    * @param socket The websocket that is subscribed
    */
-  addSubscription(id: string, socket: WebSocket) {
-    this._subscriptions.set(id, socket);
+  addSubscription(id: string, socket: WebSocket, user: SBAuthSchema) {
+    this._subscriptions.set(id, { socket, user });
   }
 
   /**
@@ -102,29 +108,41 @@ class PresenceThrottleClass {
   }
 
   /**
-   * Send updates to all subscribed clients
+   * Send updates to all subscribed clients. Each sees presences on boards where they have View Presence.
    */
-  sendUpdates(): void {
+  async sendUpdates(): Promise<void> {
     if (!this._initialized) return;
-    // Remove the clients that are no longer alive
-    const removeClients = [] as string[];
-    // Filter out the presences that are offline
-    const filteredPresences = this._presences.filter((p) => p.data.status === 'online');
-    // Pre-stringify the shared payload to avoid repeated JSON.stringify calls
-    const docJson = JSON.stringify(filteredPresences);
-    const eventJson = `{"doc":${docJson}}`;
-    this._subscriptions.forEach((socket, key) => {
-      // Check if socket is still alive
-      if (socket.readyState !== WebSocket.OPEN) {
-        removeClients.push(key);
-        return;
+    if (this._sending) {
+      this._pending = true;
+      return;
+    }
+    this._sending = true;
+    try {
+      // Filter out the presences that are offline
+      const online = this._presences.filter((p) => p.data.status === 'online');
+      const boards = online.map((p) => p.data.boardId).filter((id, i, all) => id && all.indexOf(id) === i);
+      // Pre-stringify the shared payload to avoid repeated JSON.stringify calls
+      const everything = `{"doc":${JSON.stringify(online)}}`;
+      for (const [key, { socket, user }] of this._subscriptions) {
+        // Check if socket is still alive
+        if (socket.readyState !== WebSocket.OPEN) {
+          this.removeClient(key);
+          continue;
+        }
+        const visible = await Promise.all(boards.map(async (id) => has(await boardPermissionsOf(user, id), Permission.ViewPresence)));
+        const presences = visible.every(Boolean)
+          ? undefined
+          : online.filter((p) => !p.data.boardId || p.data.userId === user.id || visible[boards.indexOf(p.data.boardId)]);
+        const event = presences ? `{"doc":${JSON.stringify(presences)}}` : everything;
+        socket.send(`{"id":${JSON.stringify(key)},"event":${event}}`);
       }
-      // Build message string with per-client id but shared payload
-      const msgJson = `{"id":${JSON.stringify(key)},"event":${eventJson}}`;
-      socket.send(msgJson);
-    });
-    // Remove the clients that are no longer alive
-    removeClients.forEach((id) => this.removeClient(id));
+    } finally {
+      this._sending = false;
+    }
+    if (this._pending) {
+      this._pending = false;
+      await this.sendUpdates();
+    }
   }
 }
 

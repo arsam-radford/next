@@ -13,7 +13,7 @@ import { mountStoreDevtool } from 'simple-zustand-devtools';
 
 // Application specific schema
 import { Board, BoardSchema } from '@sage3/shared/types';
-import { SAGE3Ability } from '@sage3/shared';
+import { Override } from '@sage3/shared';
 
 // The observable websocket and HTTP
 import { APIHttp, SocketAPI } from '../api';
@@ -26,6 +26,13 @@ interface BoardState {
   clearError: () => void;
   create: (newBoard: BoardSchema) => Promise<Board | undefined>;
   update: (id: string, updates: Partial<BoardSchema>) => void;
+  // Fetch the boards again, for example after joining a room.
+  refetch: () => Promise<void>;
+  // Replace the overrides, if they are still `before`. Resolves to an error message, if any.
+  saveOverrides: (id: string, overrides: Override[], before: Override[]) => Promise<string | undefined>;
+  savePermissionPreset: (id: string, name: string, overrides: Override[], before: Override[]) => Promise<string | undefined>;
+  applyPermissionPreset: (id: string, preset: NonNullable<BoardSchema['permissionPresets']>[number], before: Override[]) => Promise<string | undefined>;
+  deletePermissionPreset: (id: string, preset: NonNullable<BoardSchema['permissionPresets']>[number]) => Promise<string | undefined>;
   delete: (id: string) => void;
   subscribeToAllBoards: () => Promise<void>;
   subscribeByRoomId: (id: BoardSchema['roomId']) => Promise<void>;
@@ -36,6 +43,13 @@ interface BoardState {
  */
 const BoardStore = create<BoardState>()((set, get) => {
   let boardsSub: (() => void) | null = null;
+  const presetRequest = async (path: string, body: object): Promise<string | undefined> => {
+    const response = await APIHttp.POST<any>(path, body);
+    if (!response.success) return response.message ?? 'Could not update the permission preset.';
+    const board = response.data?.[0] as Board | undefined;
+    if (board) set({ boards: get().boards.map((b) => b._id === board._id ? board : b) });
+    return undefined;
+  };
   return {
     boards: [],
     error: null,
@@ -53,7 +67,6 @@ const BoardStore = create<BoardState>()((set, get) => {
       set({ error: null });
     },
     create: async (newBoard: BoardSchema) => {
-      if (!SAGE3Ability.canCurrentUser('create', 'boards')) return;
       const res = await SocketAPI.sendRESTMessage('/boards', 'POST', newBoard);
       if (!res.success) {
         set({ error: res.message });
@@ -62,23 +75,31 @@ const BoardStore = create<BoardState>()((set, get) => {
         return res.data;
       }
     },
+    saveOverrides: async (id: string, overrides: Override[], before: Override[]) => {
+      const response = await APIHttp.POST<any>(`/boards/${id}/overrides`, { overrides, before });
+      return response.success ? undefined : (response.message ?? 'Could not save the permissions.');
+    },
+    savePermissionPreset: (id, name, overrides, before) => presetRequest(`/boards/${id}/presets`, { name, overrides, before }),
+    applyPermissionPreset: (id, preset, before) => presetRequest(`/boards/${id}/presets/${preset.id}/apply`, { preset, before }),
+    deletePermissionPreset: (id, preset) => presetRequest(`/boards/${id}/presets/${preset.id}/delete`, { preset }),
     update: async (id: string, updates: Partial<BoardSchema>) => {
-      if (!SAGE3Ability.canCurrentUser('update', 'boards')) return;
       const res = await SocketAPI.sendRESTMessage(`/boards/${id}`, 'PUT', updates);
       if (!res.success) {
         set({ error: res.message });
       }
     },
     delete: async (id: string) => {
-      if (!SAGE3Ability.canCurrentUser('delete', 'boards')) return;
       const res = await SocketAPI.sendRESTMessage(`/boards/${id}`, 'DELETE');
       if (!res.success) {
         set({ error: res.message });
       }
       // TO DO Delete all apps belonging to the board
     },
+    refetch: async () => {
+      const boards = await APIHttp.GET<Board>('/boards');
+      if (boards.success && boards.data) set({ boards: boards.data });
+    },
     subscribeToAllBoards: async () => {
-      if (!SAGE3Ability.canCurrentUser('read', 'boards')) return;
       set({ boards: [], fetched: false });
       const boards = await APIHttp.GET<Board>('/boards');
       if (boards.success) {
@@ -112,9 +133,8 @@ const BoardStore = create<BoardState>()((set, get) => {
             const boards = [...get().boards];
             docs.forEach((doc) => {
               const idx = boards.findIndex((el) => el._id === doc._id);
-              if (idx > -1) {
-                boards[idx] = doc;
-              }
+              if (idx > -1) boards[idx] = doc;
+              else boards.push(doc);
             });
             set({ boards });
             break;
@@ -130,7 +150,6 @@ const BoardStore = create<BoardState>()((set, get) => {
       });
     },
     subscribeByRoomId: async (roomId: BoardSchema['roomId']) => {
-      if (!SAGE3Ability.canCurrentUser('read', 'boards')) return;
       set({ boards: [], fetched: false });
       const boards = await APIHttp.QUERY<Board>('/boards', { roomId });
       if (boards.success) {
@@ -164,9 +183,8 @@ const BoardStore = create<BoardState>()((set, get) => {
             const boards = [...get().boards];
             docs.forEach((doc) => {
               const idx = boards.findIndex((el) => el._id === doc._id);
-              if (idx > -1) {
-                boards[idx] = doc;
-              }
+              if (idx > -1) boards[idx] = doc;
+              else boards.push(doc);
             });
             set({ boards });
             break;

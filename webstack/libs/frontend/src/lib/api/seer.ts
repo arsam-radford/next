@@ -81,9 +81,15 @@ export async function toSError(error: HTTPError<Response>): Promise<SError> {
   return { message: `${error.response.status} ${error.response.statusText}`.trim() };
 }
 
+// The board the page shows (#/board/:roomId/:boardId), which the server checks Use AI on.
+function currentBoard(): string {
+  return window.location.hash.split('/')[3] ?? '';
+}
+
 async function agentPost<T>(path: string, data: object, timeoutMs = AGENT_TIMEOUT_MS, signal?: AbortSignal): Promise<T | SError> {
   try {
-    return await ky.post<T>(path, { json: await withUserCredentials(data), timeout: timeoutMs, signal }).json();
+    const headers = { 'x-sage3-board': currentBoard() };
+    return await ky.post<T>(path, { json: await withUserCredentials(data), timeout: timeoutMs, signal, headers }).json();
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') {
       return { message: 'Cancelled' };

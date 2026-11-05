@@ -125,6 +125,8 @@ export interface PluginContext {
   readonly selectedAppIds: readonly string[];
   /** This client's rendered app windows, back to front; empty without apps.read. */
   readonly appOrder: readonly string[];
+  /** The user's permissions on this board, such as 'EditApps' or 'UseAI'. The server enforces them. */
+  readonly permissions: readonly string[];
   readonly app?: PluginAppRecord;
   readonly document?: {
     readonly assetId: string;
