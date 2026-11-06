@@ -259,7 +259,8 @@ export function HomePage() {
     if (!user) return false;
     const isMember = members.some((m) => m.data.roomId === room._id && m.data.userId === userId);
     const isOwner = room.data.ownerId === userId;
-    return isMember || isOwner;
+    // Instance administrators can enter every room, member or not.
+    return isMember || isOwner || account.instanceAdmin;
   };
 
   const boardActiveFilter = (board: Board): boolean => {
@@ -609,7 +610,7 @@ export function HomePage() {
     // Check if is still a member of the room
     if (selectedRoom) {
       const isMember = members.some((m) => m.data.roomId === selectedRoom._id && m.data.userId === userId);
-      if (!isMember) {
+      if (!isMember && !account.instanceAdmin) {
         setSelectedRoom(undefined);
         setSelectedBoard(undefined);
       }
