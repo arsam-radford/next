@@ -57,6 +57,7 @@ import {
   useCan,
   useRoomPermissions,
   RoomSettingsModal,
+  useCanOpenRoomSettings,
   BoardPermissionsModal,
   ViewAsButton,
   ViewAsBanner,
@@ -149,6 +150,7 @@ export function UILayer(props: UILayerProps) {
   // Room Store
   const rooms = useRoomStore((state) => state.rooms);
   const room = rooms.find((el) => el._id === props.roomId);
+  const canOpenRoomSettings = useCanOpenRoomSettings(room);
   // Apps
   const apps = useThrottleApps(250);
   const deleteApp = useAppStore((state) => state.delete);
@@ -450,9 +452,11 @@ export function UILayer(props: UILayerProps) {
           <ToolbarButton bgColor={usersColor as SAGEColors} icon={<HiChip />} tooltip={'Kernels'} title={'Kernels'}>
             {room && board && <KernelsMenu roomId={room?._id} boardId={board?._id} />}
           </ToolbarButton>
-          <Tooltip label={'Roles and Members'}>
-            <IconButton size="sm" icon={<MdManageAccounts />} fontSize="lg" aria-label={'Roles and Members'} onClick={roomSettingsOnOpen} />
-          </Tooltip>
+          {canOpenRoomSettings && (
+            <Tooltip label={'Roles and Members'}>
+              <IconButton size="sm" icon={<MdManageAccounts />} fontSize="lg" aria-label={'Roles and Members'} onClick={roomSettingsOnOpen} />
+            </Tooltip>
+          )}
           <ViewAsButton roomId={props.roomId} />
           <ViewAsBanner />
           {has(roomPermissions, Permission.ManageBoards) && (

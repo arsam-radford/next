@@ -53,10 +53,33 @@ import { RoleColorPicker } from './RoleColor';
 
 type Props = { isOpen: boolean; onClose: () => void; room: Room };
 
+// Whether someone has any tab of the dialog to use. Offer the dialog only then.
+export function useCanOpenRoomSettings(room: Room | undefined): boolean {
+  const permissions = useRoomPermissions(room?._id);
+  const account = useAccount();
+  if (!room) return false;
+  return (
+    has(permissions, Permission.ManageRoles) ||
+    has(permissions, Permission.ManageMembers) ||
+    has(permissions, Permission.ViewAuditLog) ||
+    account.instanceAdmin ||
+    account.userId === room.data.ownerId
+  );
+}
+
 export function RoomSettingsModal(props: Props) {
   const permissions = useRoomPermissions(props.room._id);
   const account = useAccount();
   const canSaveTemplate = account.instanceAdmin || account.userId === props.room.data.ownerId;
+  // Only the tabs this person can use, so the dialog never opens on one they cannot.
+  const tabs = [
+    { title: 'Roles', allowed: has(permissions, Permission.ManageRoles), panel: <RolesTab room={props.room} /> },
+    { title: 'Groups', allowed: has(permissions, Permission.ManageRoles), panel: <GroupsTab room={props.room} /> },
+    { title: 'Invites', allowed: has(permissions, Permission.ManageMembers), panel: <InvitesPanel room={props.room} /> },
+    { title: 'Bans', allowed: has(permissions, Permission.ManageMembers), panel: <BansTab room={props.room} /> },
+    { title: 'Audit Log', allowed: has(permissions, Permission.ViewAuditLog), panel: <AuditTab room={props.room} /> },
+    { title: 'Templates', allowed: canSaveTemplate, panel: <TemplatesTab room={props.room} /> },
+  ].filter((tab) => tab.allowed);
   return (
     <Modal isOpen={props.isOpen} onClose={props.onClose} size="4xl" scrollBehavior="inside" blockScrollOnMount={false}>
       <ModalOverlay />
@@ -66,30 +89,14 @@ export function RoomSettingsModal(props: Props) {
         <ModalBody pb="6">
           <Tabs isLazy>
             <TabList>
-              <Tab isDisabled={!has(permissions, Permission.ManageRoles)}>Roles</Tab>
-              <Tab isDisabled={!has(permissions, Permission.ManageRoles)}>Groups</Tab>
-              <Tab isDisabled={!has(permissions, Permission.ManageMembers)}>Invites</Tab>
-              <Tab isDisabled={!has(permissions, Permission.ManageMembers)}>Bans</Tab>
-              <Tab isDisabled={!has(permissions, Permission.ViewAuditLog)}>Audit Log</Tab>
-              {canSaveTemplate && <Tab>Templates</Tab>}
+              {tabs.map((tab) => (
+                <Tab key={tab.title}>{tab.title}</Tab>
+              ))}
             </TabList>
             <TabPanels>
-              <TabPanel>
-                <RolesTab room={props.room} />
-              </TabPanel>
-              <TabPanel>
-                <GroupsTab room={props.room} />
-              </TabPanel>
-              <TabPanel>
-                <InvitesPanel room={props.room} />
-              </TabPanel>
-              <TabPanel>
-                <BansTab room={props.room} />
-              </TabPanel>
-              <TabPanel>
-                <AuditTab room={props.room} />
-              </TabPanel>
-              {canSaveTemplate && <TabPanel><TemplatesTab room={props.room} /></TabPanel>}
+              {tabs.map((tab) => (
+                <TabPanel key={tab.title}>{tab.panel}</TabPanel>
+              ))}
             </TabPanels>
           </Tabs>
         </ModalBody>

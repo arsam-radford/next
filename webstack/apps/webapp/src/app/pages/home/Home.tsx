@@ -65,6 +65,7 @@ import {
   EnterBoardByURLModal,
   EditRoomModal,
   RoomSettingsModal,
+  useCanOpenRoomSettings,
   ViewAsBanner,
   useBoardPermissionsIn,
   EditBoardModal,
@@ -237,6 +238,7 @@ export function HomePage() {
   const roomPermissions = useRoomPermissions(selectedRoom?._id ?? '');
   const canCreateBoards = has(roomPermissions, Permission.ManageBoards);
   const canManageRoom = has(roomPermissions, Permission.ManageRoom);
+  const canOpenRoomSettings = useCanOpenRoomSettings(selectedRoom);
   // Boards the user (or, while previewing, the previewed roles) can see
   const boardPermissionsIn = useBoardPermissionsIn(selectedRoom?._id);
 
@@ -947,9 +949,11 @@ export function HomePage() {
                       Settings
                     </MenuItem>
                   </Tooltip>
-                  <MenuItem icon={<Icon as={MdPeople} fontSize="18px" />} onClick={roomSettingsOnOpen}>
-                    Roles and Members
-                  </MenuItem>
+                  {canOpenRoomSettings && (
+                    <MenuItem icon={<Icon as={MdPeople} fontSize="18px" />} onClick={roomSettingsOnOpen}>
+                      Roles and Members
+                    </MenuItem>
+                  )}
                   <Tooltip
                     label={selectedRoom.data.ownerId === userId ? 'Owners cannot leave their own room.' : 'Leave this room'}
                     openDelay={400}
