@@ -364,8 +364,12 @@ export function PluginFrame(props: FrameProps) {
 
   latestProps.current = props;
 
-  const toast = useToast();
+  // Kept out of the session's dependencies: the board connecting must not reload a running plugin,
+  // and cancelling a frame's load sends desktop clients back to their hub list.
+  const toast = useRef(useToast()).current;
   const { yAnnotations } = useYjs();
+  const latestAnnotations = useRef(yAnnotations);
+  latestAnnotations.current = yAnnotations;
   const packageDigest = props.plugin.data.package.digest;
   const src = `/plugins/host?${new URLSearchParams({
     roomId: props.roomId,
@@ -461,8 +465,8 @@ export function PluginFrame(props: FrameProps) {
           throw new Error('Missing annotations.read capability.');
         }
 
-        // Board frames mount inside the connected board's Yjs provider.
-        return readPluginAnnotations(yAnnotations!.doc);
+        if (!latestAnnotations.current) throw new Error('The board is still connecting.');
+        return readPluginAnnotations(latestAnnotations.current.doc);
       }
       if (method === 'ui.panel.open') {
         // openPanel matches both ids against the manifest and the board.
@@ -810,7 +814,7 @@ export function PluginFrame(props: FrameProps) {
       themeObserver.disconnect();
       window.removeEventListener('message', handleHandshake);
     };
-  }, [src, packageDigest, props.boardId, props.appId, props.viewId, props.controller, toast, yAnnotations]);
+  }, [src, packageDigest, props.boardId, props.appId, props.viewId, props.controller, toast]);
 
   return (
     <iframe
