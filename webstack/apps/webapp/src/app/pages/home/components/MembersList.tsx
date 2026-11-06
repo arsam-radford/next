@@ -258,6 +258,7 @@ function MembersListItem(props: { user: User; member: RoomMembers; room: Room; o
         boxSizing="border-box"
         width="100%"
         minHeight="46px"
+        flexShrink={0}
         border={`solid 1px ${props.online ? color : baseBorderColor}`}
         transition={'all 0.2s ease-in-out'}
       >
