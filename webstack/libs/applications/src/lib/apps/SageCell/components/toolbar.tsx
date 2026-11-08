@@ -6,6 +6,7 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+import { Permission } from '@sage3/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 
@@ -30,7 +31,7 @@ import {
   useUser,
   useKernelStore,
   CreateKernelModal,
-  useAbility,
+  useCan,
   ConfirmValueModal,
   apiUrls,
 } from '@sage3/frontend';
@@ -50,7 +51,7 @@ import { VscRunAbove, VscRunAll, VscRunBelow } from 'react-icons/vsc';
  */
 export function ToolbarComponent(props: App): JSX.Element {
   // Abilties
-  const canExecuteCode = useAbility('execute', 'kernels');
+  const canExecuteCode = useCan(Permission.ExecuteCode);
   // Store between toolbar and appWindow
   const setExecute = useStore((state) => state.setExecute);
   const setExecuteAll = useStore((state) => state.setExecuteAll);
@@ -59,7 +60,7 @@ export function ToolbarComponent(props: App): JSX.Element {
   const s = props.data.state as AppState;
   const updateState = useAppStore((state) => state.updateState);
   // Abilities
-  const canCreateKernels = useAbility('create', 'kernels');
+  const canCreateKernels = useCan(Permission.ExecuteCode);
   // User state
   const { user } = useUser();
   // Room and board
@@ -181,6 +182,7 @@ export function ToolbarComponent(props: App): JSX.Element {
         fd.append('files', codefile);
         // Add fields to the upload form
         fd.append('room', roomId);
+        fd.append('board', props.data.boardId);
         // Upload with a POST request
         fetch(apiUrls.assets.upload, { method: 'POST', body: fd })
           .catch((error: Error) => {
@@ -377,10 +379,10 @@ export const GroupedToolbarComponent = (props: { apps: AppGroup<'SageCell'> }) =
   // User
   const { user } = useUser();
   // Abilties
-  const canExecuteCode = useAbility('execute', 'kernels');
+  const canExecuteCode = useCan(Permission.ExecuteCode);
 
   // Abilities
-  const canCreateKernels = useAbility('create', 'kernels');
+  const canCreateKernels = useCan(Permission.ExecuteCode);
 
   // Kernel Store
   const apiStatus = useKernelStore((state) => state.apiStatus);

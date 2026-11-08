@@ -26,6 +26,9 @@
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "paths": {
+      "@sage3/applications/actions": [
+        "./libs/applications/src/lib/actions.ts"
+      ],
       "@sage3/applications/apps": [
         "./libs/applications/src/lib/apps.ts"
       ],

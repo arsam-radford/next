@@ -23,3 +23,4 @@ export * from './kernel';
 export * from './insight';
 export * from './annotation';
 export * from './link';
+export * from './viewAs';

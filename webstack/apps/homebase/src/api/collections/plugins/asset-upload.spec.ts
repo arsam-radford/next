@@ -49,7 +49,7 @@ it('uses native processing and persistence with server-derived room/user and onl
   });
   const response = { status: jest.fn().mockReturnThis(), send: finish, json: finish } as unknown as express.Response;
 
-  await uploadPluginAsset(request, response, 'trusted-room');
+  await uploadPluginAsset(request, response, { roomId: 'trusted-room', boardId: 'trusted-board' });
 
   expect(await result).toEqual({ id: 'new-asset', name: 'note.txt', mimeType: 'text/plain', size: 4 });
   expect(AssetsCollection.metadataFile).toHaveBeenCalledWith(expect.any(String), 'stored.txt', 'text/plain');
@@ -64,7 +64,7 @@ it('uses native processing and persistence with server-derived room/user and onl
     'trusted-room',
   );
   expect(AssetsCollection.addBatch).toHaveBeenCalledWith(
-    [expect.objectContaining({ room: 'trusted-room', owner: 'native-user', path: '/private/stored.txt' })],
+    [expect.objectContaining({ room: 'trusted-room', board: 'trusted-board', owner: 'native-user', path: '/private/stored.txt' })],
     'native-user',
   );
 });

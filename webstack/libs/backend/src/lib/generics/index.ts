@@ -8,3 +8,5 @@
 
 export * from './SAGECollection';
 export * from './SAGERouter';
+export * from './SAGEWSRouter';
+export * from './permissions';

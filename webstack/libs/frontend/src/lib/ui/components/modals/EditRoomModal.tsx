@@ -25,10 +25,9 @@ import {
   Text,
 } from '@chakra-ui/react';
 
-import { v5 as uuidv5 } from 'uuid';
-import { MdPerson, MdLock } from 'react-icons/md';
+import { MdPerson } from 'react-icons/md';
 
-import { useRoomStore, useBoardStore, useAppStore, useConfigStore, ConfirmModal, useRouteNav } from '@sage3/frontend';
+import { useRoomStore, useBoardStore, useAppStore, ConfirmModal, useRouteNav } from '@sage3/frontend';
 import { isAlphanumericWithSpacesAndForeign, SAGEColors } from '@sage3/shared';
 import { Room, RoomSchema } from '@sage3/shared/types';
 import { ColorPicker } from '../general';
@@ -45,8 +44,6 @@ const DESC_MAX = 150;
 
 export function EditRoomModal(props: EditRoomModalProps): JSX.Element {
   const { toHome } = useRouteNav();
-  // Configuration information
-  const config = useConfigStore((state) => state.config);
 
   const [name, setName] = useState<RoomSchema['name']>(props.room.data.name);
   const [description, setDescription] = useState<RoomSchema['description']>(props.room.data.description);
@@ -71,9 +68,6 @@ export function EditRoomModal(props: EditRoomModalProps): JSX.Element {
 
   const [isListed, setIsListed] = useState(props.room.data.isListed);
   const [isProtected, setProtected] = useState(props.room.data.isPrivate);
-  const [password, setPassword] = useState('');
-  const [passwordChanged, setPasswordChanged] = useState(false);
-  const [valid, setValid] = useState(true);
 
   // Delete Confirmation  Modal
   const { isOpen: delConfirmIsOpen, onOpen: delConfirmOnOpen, onClose: delConfirmOnClose } = useDisclosure();
@@ -87,7 +81,6 @@ export function EditRoomModal(props: EditRoomModalProps): JSX.Element {
     setColor(props.room.data.color as SAGEColors);
     setIsListed(props.room.data.isListed);
     setProtected(props.room.data.isPrivate);
-    setPassword('');
   }, [props.room]);
 
   // When the modal panel opens, select the text for quick replacing
@@ -125,22 +118,9 @@ export function EditRoomModal(props: EditRoomModalProps): JSX.Element {
       updated = true;
     }
 
-    if (passwordChanged) {
-      if (!isProtected) {
-        updated = true;
-        updateRoom(props.room._id, { privatePin: '', isPrivate: false });
-      } else {
-        if (password === '') {
-          updated = true;
-          updateRoom(props.room._id, { privatePin: '', isPrivate: false });
-        } else {
-          updated = true;
-          // hash the PIN: the namespace comes from the server configuration
-          const key = uuidv5(password, config.namespace);
-          updateRoom(props.room._id, { privatePin: key, isPrivate: true });
-        }
-      }
-      setPasswordChanged(false);
+    if (isProtected !== props.room.data.isPrivate) {
+      updateRoom(props.room._id, { isPrivate: isProtected });
+      updated = true;
     }
     if (updated) {
       toast({
@@ -215,24 +195,9 @@ export function EditRoomModal(props: EditRoomModalProps): JSX.Element {
     setIsListed(e.target.checked);
   };
 
-  // Toggle of protect room with password
+  // Toggle whether joining needs an invite
   const checkProtected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Set value of protected
     setProtected(e.target.checked);
-    // Reset password
-    setPassword('');
-    setPasswordChanged(true);
-    if (e.target.checked) {
-      setValid(false);
-    } else {
-      setValid(true);
-    }
-  };
-  const handlePassword = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(e.target.value);
-    setPasswordChanged(true);
-    if (e.target.value === '') setValid(false);
-    else setValid(true);
   };
 
   return (
@@ -287,29 +252,15 @@ export function EditRoomModal(props: EditRoomModalProps): JSX.Element {
             Room Listed Publicly
           </Checkbox>
           <Checkbox mt={4} mr={4} onChange={checkProtected} defaultChecked={isProtected}>
-            Room Protected with a Password
+            Joining Needs an Invite
           </Checkbox>
-          <InputGroup mt={4}>
-            <InputLeftElement pointerEvents="none" children={<MdLock size={'24px'} />} />
-            <Input
-              type="text"
-              autoCapitalize="off"
-              placeholder={'Set Password'}
-              _placeholder={{ opacity: 1, color: 'gray.600' }}
-              mr={4}
-              value={password}
-              onChange={handlePassword}
-              isRequired={isProtected}
-              isDisabled={!isProtected}
-            />
-          </InputGroup>
         </ModalBody>
         <ModalFooter pl="4" pr="8" mb="2">
           <Box display="flex" justifyContent="space-between" width="100%">
             <Button colorScheme="red" onClick={delConfirmOnOpen} mx="2">
               Delete
             </Button>
-            <Button colorScheme="green" onClick={handleSubmit} isDisabled={!name || !valid}>
+            <Button colorScheme="green" onClick={handleSubmit} isDisabled={!name}>
               Update
             </Button>
           </Box>

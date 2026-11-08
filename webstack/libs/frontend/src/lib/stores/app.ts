@@ -13,9 +13,9 @@ import { mountStoreDevtool } from 'simple-zustand-devtools';
 
 import { AppState, AppSchema, AppCreateInput, App } from '@sage3/applications/schema';
 import { Board } from '@sage3/shared/types';
+import { Override } from '@sage3/shared';
 // App intial Values
 import { initialValues } from '@sage3/applications/initialValues';
-import { SAGE3Ability } from '@sage3/shared';
 
 // The observable websocket and HTTP
 import { APIHttp, SocketAPI } from '../api';
@@ -37,6 +37,10 @@ interface Applications {
   updateBatch: (updates: { id: string; updates: Partial<AppSchema> }[]) => Promise<void>;
   updateState: (id: string, state: Partial<AppState>) => Promise<void>;
   updateStateBatch: (updates: { id: string; updates: Partial<AppState> }[]) => Promise<void>;
+  // Run an app action, such as a Poll vote. The server applies it.
+  act: (id: string, name: string, args: Record<string, unknown>) => Promise<boolean>;
+  // Replace an app's own overrides, if they are still `before`. Resolves to an error message, if any.
+  saveAppOverrides: (id: string, overrides: Override[], before: Override[]) => Promise<string | undefined>;
   delete: (id: string | string[]) => Promise<void>;
   unsubToBoard: (uid: string) => void;
   subToBoard: (boardId: AppSchema['boardId']) => Promise<void>;
@@ -63,7 +67,6 @@ const AppStore = create<Applications>()((set, get) => {
       set({ error: null });
     },
     create: async (newApp: AppCreateInput) => {
-      if (!SAGE3Ability.canCurrentUser('create', 'apps')) return;
       const app = await SocketAPI.sendRESTMessage('/apps', 'POST', newApp);
       if (!app.success) {
         set({ error: { msg: app.message } });
@@ -74,7 +77,6 @@ const AppStore = create<Applications>()((set, get) => {
       return app;
     },
     createBatch: async (newApps: AppCreateInput[]) => {
-      if (!SAGE3Ability.canCurrentUser('create', 'apps')) return;
       const res = await SocketAPI.sendRESTMessage('/apps', 'POST', { batch: newApps });
       if (!res.success) {
         set({ error: { msg: res.message } });
@@ -83,7 +85,6 @@ const AppStore = create<Applications>()((set, get) => {
       }
     },
     update: async (id: string, updates: Partial<AppSchema>) => {
-      if (!SAGE3Ability.canCurrentUser('update', 'apps')) return false;
       const res = await SocketAPI.sendRESTMessage('/apps/' + id, 'PUT', updates);
       if (!res.success) {
         set({ error: { id, msg: res.message } });
@@ -91,8 +92,16 @@ const AppStore = create<Applications>()((set, get) => {
       }
       return true;
     },
+    saveAppOverrides: async (id, overrides, before) => {
+      const res = await APIHttp.POST<any>(`/apps/${id}/overrides`, { overrides, before });
+      return res.success ? undefined : (res.message ?? 'Could not save the permissions.');
+    },
+    act: async (id: string, name: string, args: Record<string, unknown>) => {
+      const res = await APIHttp.POST<any>(`/apps/${id}/action`, { name, args });
+      if (!res.success) set({ error: { id, msg: res.message } });
+      return res.success;
+    },
     updateBatch: async (updates: { id: string; updates: Partial<AppSchema> }[]) => {
-      if (!SAGE3Ability.canCurrentUser('update', 'apps')) return;
       const res = await SocketAPI.sendRESTMessage('/apps', 'PUT', { batch: updates });
       if (!res.success) {
         set({ error: { id: updates[0].id, msg: res.message } });
@@ -101,7 +110,6 @@ const AppStore = create<Applications>()((set, get) => {
     updateState: async (id: string, state: Partial<AppState>) => {
       // HOT FIX: This is a hack to make the app state update work.
       // Not really type safe and I need to figure out a way to do nested props properly.
-      if (!SAGE3Ability.canCurrentUser('update', 'apps')) return;
       const update = {} as any;
       for (const key in state) {
         update[`state.${key}`] = (state as any)[key];
@@ -114,7 +122,6 @@ const AppStore = create<Applications>()((set, get) => {
     updateStateBatch: async (updates: { id: string; updates: Partial<AppState> }[]) => {
       // HOT FIX: This is a hack to make the app state update work.
       // Not really type safe and I need to figure out a way to do nested props properly.
-      if (!SAGE3Ability.canCurrentUser('update', 'apps')) return;
       updates.forEach((u) => {
         const revisedUpdates = {} as any;
         for (const key in u.updates) {
@@ -128,7 +135,6 @@ const AppStore = create<Applications>()((set, get) => {
       }
     },
     delete: async (id: string | string[]) => {
-      if (!SAGE3Ability.canCurrentUser('delete', 'apps')) return;
       if (Array.isArray(id)) {
         const res = await SocketAPI.sendRESTMessage('/apps', 'DELETE', { batch: id });
         if (!res.success) {
@@ -142,7 +148,6 @@ const AppStore = create<Applications>()((set, get) => {
       }
     },
     subToBoard: async (boardId: AppSchema['boardId']) => {
-      if (!SAGE3Ability.canCurrentUser('read', 'apps')) return;
       set({ apps: [], fetched: false });
       const apps = await APIHttp.QUERY<App>('/apps', { boardId });
       if (apps.success) {
@@ -204,7 +209,6 @@ const AppStore = create<Applications>()((set, get) => {
       set({ apps: [] });
     },
     duplicateApps: async (appIds: string[], board?: Board) => {
-      if (!SAGE3Ability.canCurrentUser('create', 'apps')) return;
       // Get the current apps
       const apps = get().apps;
       // Find the apps to copy
@@ -307,7 +311,6 @@ const AppStore = create<Applications>()((set, get) => {
     },
 
     async fetchBoardApps(boardId: AppSchema['boardId']) {
-      if (!SAGE3Ability.canCurrentUser('read', 'apps')) return;
       const apps = await APIHttp.QUERY<App>('/apps', { boardId });
       if (apps.success) {
         return apps.data;

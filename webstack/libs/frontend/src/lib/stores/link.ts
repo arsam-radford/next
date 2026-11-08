@@ -13,7 +13,6 @@ import { mountStoreDevtool } from 'simple-zustand-devtools';
 
 // Application specific schema
 import { Link, LinkSchema } from '@sage3/shared/types';
-import { SAGE3Ability } from '@sage3/shared';
 
 // The observable websocket
 import { APIHttp, SocketAPI } from '../api';
@@ -51,7 +50,6 @@ const LinkStore = create<LinkStoreState>()((set, get) => {
 
   // Create a new link
   const createLink = async (newLink: LinkSchema): Promise<Link | undefined> => {
-    if (!SAGE3Ability.canCurrentUser('create', 'links')) return;
     const link = await SocketAPI.sendRESTMessage('/links', 'POST', newLink);
     if (!link.success) {
       console.error('Error creating link', link);
@@ -63,7 +61,6 @@ const LinkStore = create<LinkStoreState>()((set, get) => {
 
   // Delete a link
   const deleteLink = async (id: string | string[]): Promise<boolean> => {
-    if (!SAGE3Ability.canCurrentUser('delete', 'links')) return false;
     if (Array.isArray(id)) {
       const res = await SocketAPI.sendRESTMessage('/links', 'DELETE', { batch: id });
       return res.success;
@@ -122,9 +119,6 @@ const LinkStore = create<LinkStoreState>()((set, get) => {
       }
     },
     subscribe: async (boardId: string) => {
-      if (!SAGE3Ability.canCurrentUser('read', 'links')) {
-        return;
-      }
       const res = await APIHttp.QUERY<Link>('/links', { boardId: boardId });
       if (res.success) {
         set({ links: res.data });

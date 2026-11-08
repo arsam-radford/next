@@ -2,7 +2,8 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import type { Asset, Board, Plugin } from '@sage3/shared/types';
 import type { SBAuthSchema } from '@sage3/sagebase';
-import { checkPermissionsWS } from '@sage3/backend/permissions';
+import { boardPermissionsOf, roomPermissionsOf } from '@sage3/backend/permissions';
+import { has, Permission } from '@sage3/shared';
 
 export class PluginAssetRequestError extends Error {
   constructor(
@@ -13,19 +14,19 @@ export class PluginAssetRequestError extends Error {
   }
 }
 
-export function requirePluginAssetAccess(
+export async function requirePluginAssetAccess(
   plugin: Plugin | undefined,
   board: Board | undefined,
   user: SBAuthSchema,
   digest: string | undefined,
   action: 'GET' | 'POST',
-): string {
-  // Every role that can read one collection can read all of them.
-  if (!checkPermissionsWS(user, 'GET', 'PLUGINS') || (action === 'POST' && !checkPermissionsWS(user, 'POST', 'ASSETS'))) {
-    throw new PluginAssetRequestError('Permission denied.', 403);
-  }
+): Promise<{ roomId: string; boardId: string }> {
   if (!plugin || !board || !plugin.data.roomId || plugin.data.roomId !== board.data.roomId) {
     throw new PluginAssetRequestError('Extension or board not found in this room.', 404);
+  }
+  const needed = action === 'GET' ? Permission.ViewBoard : Permission.UploadAssets;
+  if (!has(await boardPermissionsOf(user, board._id), needed)) {
+    throw new PluginAssetRequestError('Permission denied.', 403);
   }
 
   const packaged = plugin.data.package;
@@ -39,17 +40,19 @@ export function requirePluginAssetAccess(
     throw new PluginAssetRequestError('Extension is unavailable or lacks asset access.', 403);
   }
 
-  return plugin.data.roomId;
+  return { roomId: plugin.data.roomId, boardId: board._id };
 }
 
-/** Resolve only native, recorded files within the asset root, including through symlinks. */
 export async function pluginAssetFile(
   asset: Asset,
   roomId: string,
   root: string,
-  page?: number,
+  page: number | undefined,
+  user: SBAuthSchema,
 ): Promise<{ path: string; mimeType: string }> {
-  if (asset.data.room !== roomId) {
+  // A plugin reading a file's bytes is a download: the user's own file, or Download Others' Files.
+  const permissions = asset.data.board ? await boardPermissionsOf(user, asset.data.board) : await roomPermissionsOf(user, asset.data.room);
+  if (asset.data.room !== roomId || (asset.data.owner !== user.id && !has(permissions, Permission.DownloadOthersAssets))) {
     throw new PluginAssetRequestError('Asset not found.', 404);
   }
 

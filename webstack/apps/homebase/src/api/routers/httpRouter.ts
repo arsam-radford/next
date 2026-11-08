@@ -32,6 +32,8 @@ import {
   RoomMembersCollection,
   AnnotationsCollection,
   LinkCollection,
+  AuditCollection,
+  InvitesCollection,
 } from '../collections';
 
 // SAGEBase Imports
@@ -76,6 +78,8 @@ export function expressAPIRouter(): express.Router {
   router.use('/roommembers', RoomMembersCollection.router());
   router.use('/annotations', AnnotationsCollection.router());
   router.use('/links', LinkCollection.router());
+  router.use('/invites', InvitesCollection.router());
+  router.use('/audit', AuditCollection.router());
 
   // Check to see if plugins module is enabled.
   if (config.features.plugins) {

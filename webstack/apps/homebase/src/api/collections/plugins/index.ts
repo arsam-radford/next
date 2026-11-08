@@ -7,7 +7,8 @@
  */
 
 import { APIClientWSMessage, PluginSchema } from '@sage3/shared/types';
-import { SAGE3Collection, sageRouter, SubscriptionCache } from '@sage3/backend';
+import { SAGE3Collection, sageRouter, SubscriptionCache, canInRoom, inRoom } from '@sage3/backend';
+import { Permission } from '@sage3/shared';
 import { createRateLimiter, SBAuthSchema } from '@sage3/sagebase';
 import express from 'express';
 import { WebSocket } from 'ws';
@@ -18,8 +19,10 @@ import multer from 'multer';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import { readPluginPackage } from './package';
-import { performPluginOperation, pluginScope, PluginRequestError, requirePluginPermission } from './operations';
+import { performPluginOperation, pluginScope, PluginRequestError } from './operations';
+import { AuditCollection } from '../audit';
 import { RoomsCollection } from '../rooms';
+import { refuse } from '../access';
 import { pluginActivationSchema, replacePluginPackage, setPluginActivation } from './approval';
 
 // Plugin Paths
@@ -93,12 +96,15 @@ class SAGE3PluginsCollection extends SAGE3Collection<PluginSchema> {
         let staging: string | undefined;
 
         try {
-          requirePluginPermission(req.user, 'POST', 'PLUGINS');
           const body = uploadBody.parse(req.body);
 
           const room = await RoomsCollection.get(body.roomId);
           if (!room) {
             throw new PluginRequestError('Room not found.', 404);
+          }
+          // Nothing an upload contains runs until someone with Manage Plugins approves it.
+          if (!(await canInRoom(req.user, body.roomId, Permission.UploadPlugins))) {
+            throw new PluginRequestError('Permission denied.', 403);
           }
 
           const bytes = await fsPromises.readFile(uploaded);
@@ -142,7 +148,7 @@ class SAGE3PluginsCollection extends SAGE3Collection<PluginSchema> {
 
           const packageRecord = { digest, manifest };
           if (existing) {
-            return replacePluginPackage(this.collection.docRef(existing._id), packageRecord, req.user.id, room.data.ownerId);
+            return replacePluginPackage(this.collection.docRef(existing._id), packageRecord, req.user.id, room);
           }
 
           const id = createHash('sha256').update(body.roomId).update('\0').update(manifest.id).digest('hex');
@@ -179,9 +185,17 @@ class SAGE3PluginsCollection extends SAGE3Collection<PluginSchema> {
       handle(async (req) => {
         const activation = pluginActivationSchema.parse(req.body);
         const { plugin, boardId } = await pluginScope(this, req.params, req.user);
-        requirePluginPermission(req.user, 'PUT', 'PLUGINS');
+        if (!(await canInRoom(req.user, plugin.data.roomId!, Permission.ManagePlugins))) {
+          throw new PluginRequestError('Approving extensions needs Manage Plugins.', 403);
+        }
 
-        return setPluginActivation(this.collection.docRef(plugin._id), boardId, activation, req.user.id);
+        const approved = await setPluginActivation(this.collection.docRef(plugin._id), boardId, activation, req.user.id);
+        const room = await RoomsCollection.get(plugin.data.roomId!);
+        if (room) {
+          const summary = `${activation.enabled ? 'approved' : 'disabled'} ${plugin.data.name} on board ${boardId}`;
+          await AuditCollection.record(req.user, room, 'plugin.activation', plugin._id, summary);
+        }
+        return approved;
       }),
     );
 
@@ -198,15 +212,13 @@ class SAGE3PluginsCollection extends SAGE3Collection<PluginSchema> {
       '/remove/:id',
       createRateLimiter(4),
       handle(async (req) => {
-        requirePluginPermission(req.user, 'DELETE', 'PLUGINS');
-
         // A named route parameter is always a non-empty string.
         const plugin = await this.get(req.params.id as string);
         if (!plugin) {
           throw new PluginRequestError('Plugin not found.', 404);
         }
-        if (plugin.data.ownerId !== req.user.id) {
-          throw new PluginRequestError('Only the plugin owner can remove it.', 403);
+        if (plugin.data.ownerId !== req.user.id && !(await canInRoom(req.user, plugin.data.roomId!, Permission.ManagePlugins))) {
+          throw new PluginRequestError('Only the plugin owner or Manage Plugins can remove it.', 403);
         }
 
         if (!(await this.deletePlugin(plugin._id))) {
@@ -226,6 +238,13 @@ class SAGE3PluginsCollection extends SAGE3Collection<PluginSchema> {
       }
     });
 
+    // Room members can see the room's plugins. Writes go through the routes above.
+    this.access = {
+      create: refuse,
+      read: (auth, doc) => (doc.data.roomId ? inRoom(auth, doc.data.roomId) : Promise.resolve(false)),
+      update: refuse,
+      delete: refuse,
+    };
     router.use(sageRouter<PluginSchema>(this));
     this.httpRouter = router;
   }

@@ -47,7 +47,7 @@ import { TableViewer } from './components';
 // Collection configuration for better organization
 const COLLECTIONS = {
   rooms: { columns: ['_id', 'name', 'description', 'color'] as const },
-  boards: { columns: ['_id', 'name', 'description', 'isPrivate'] as const },
+  boards: { columns: ['_id', 'name', 'description', 'roomId'] as const },
   apps: { columns: ['_id', 'type', 'title', 'boardId'] as const },
   assets: { columns: ['_id', 'originalfilename', 'mimetype', 'size'] as const },
   users: { columns: ['_id', 'email', 'name', 'color', 'userType', 'userRole'] as const },

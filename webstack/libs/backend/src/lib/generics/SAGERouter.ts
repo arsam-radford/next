@@ -10,99 +10,103 @@ import express from 'express';
 
 import { SBAuthSchema, SBJSON } from '@sage3/sagebase';
 
-import { SAGE3Collection } from './SAGECollection';
+import { AccessError, SAGE3Collection } from './SAGECollection';
 
-import { checkPermissionsREST, AuthSubject } from './permissions';
+type Handler = (req: express.Request, res: express.Response) => Promise<void>;
+
+// Answer refusals with their status; anything else is a server error.
+export function guarded(handler: Handler): Handler {
+  return async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (error) {
+      if (error instanceof AccessError) {
+        res.status(error.status).send({ success: false, message: error.message, data: undefined });
+      } else {
+        console.error('Router>', error);
+        res.status(500).send({ success: false, message: 'Server error.', data: undefined });
+      }
+    }
+  };
+}
 
 export function sageRouter<T extends SBJSON>(collection: SAGE3Collection<T>): express.Router {
   const router = express.Router();
 
-  //  Check permissions on collections
-  router.use(checkPermissionsREST(collection.name as AuthSubject));
-
   // POST: Add new document or multiple docs with a batch request
-  router.post('/', async ({ body, user }, res) => {
-    const auth = user as SBAuthSchema;
-    const userId = auth?.id || '-';
-    // Check if body has property 'batch', if so this is a batch request
-    if (body && body.batch) {
-      const docs = await collection.addBatch(body.batch, userId);
-      if (docs) res.status(200).send({ success: true, message: 'Successfully created the documents.', data: docs });
-      else res.status(500).send({ success: false, message: 'Failed to create the documents.', data: undefined });
-    } else {
-      const doc = await collection.add(body, userId);
-      if (doc) res.status(200).send({ success: true, message: 'Successfully created the document.', data: [doc] });
-      else res.status(500).send({ success: false, message: 'Failed to create the document.', data: undefined });
-    }
-  });
+  router.post(
+    '/',
+    guarded(async ({ body, user }, res) => {
+      const items = (body?.batch ?? [body]) as T[];
+      const docs = await collection.createAs(user as SBAuthSchema, items);
+      res.status(200).send({ success: true, message: 'Successfully created the documents.', data: docs });
+    })
+  );
 
   // GET: Get all the docs, multiple docs by id, or query
-  router.get('/', async ({ query, body }, res) => {
-    let docs = null;
-    // If body has property 'batch', this is a batch request
-    if (body && body.batch) {
-      docs = await collection.getBatch(body.batch);
-    }
-    // Check for a query, if not query get all the docs
-    else if (Object.keys(query).length === 0) {
-      docs = await collection.getAll();
-    } else if (Object.keys(query).length === 1) {
-      const field = Object.keys(query)[0];
-      const q = query[field] as string | number;
-      docs = await collection.query(field, q);
-    } else {
-      res.status(500).send({ success: false, message: 'Too many query parameters. Only one query parameter allowed.', data: undefined });
-    }
-    if (docs) res.status(200).send({ success: true, message: 'Successfully retrieved documents.', data: docs });
-    else res.status(500).send({ success: false, message: 'Failed to retrieve documents.', data: undefined });
-  });
+  router.get(
+    '/',
+    guarded(async ({ query, body, user }, res) => {
+      let docs;
+      const keys = Object.keys(query);
+      if (body?.batch) docs = await collection.getBatch(body.batch);
+      else if (keys.length === 0) docs = await collection.getAll();
+      else if (keys.length === 1) docs = await collection.query(keys[0], query[keys[0]] as string | number);
+      else throw new AccessError('Too many query parameters. Only one query parameter allowed.', 400);
+      if (!docs) throw new AccessError('Failed to retrieve documents.', 500);
+      const data = await collection.readAs(user as SBAuthSchema, docs);
+      res.status(200).send({ success: true, message: 'Successfully retrieved documents.', data });
+    })
+  );
 
   // GET: Get one doc.
-  router.get('/:id', async ({ params }, res) => {
-    const doc = await collection.get(params.id);
-    if (doc) res.status(200).send({ success: true, message: 'Successfully retrieved the documents.', data: [doc] });
-    else res.status(500).send({ success: false, message: 'Failed to retrieve the document.', data: undefined });
-  });
+  router.get(
+    '/:id',
+    guarded(async ({ params, user }, res) => {
+      const doc = await collection.get(String(params.id));
+      const data = doc ? await collection.readAs(user as SBAuthSchema, [doc]) : [];
+      if (data.length === 0) throw new AccessError('Failed to retrieve the document.', 404);
+      res.status(200).send({ success: true, message: 'Successfully retrieved the documents.', data });
+    })
+  );
 
   // PUT: Update multiple docs with a batch
-  router.put('', async ({ body, user }, res) => {
-    const auth = user as SBAuthSchema;
-    const userId = auth?.id || '-';
-    if (body && body.batch) {
-      const success = await collection.updateBatch(body.batch, userId);
-      if (success) res.status(200).send({ success: true, message: 'Successfully updated documents.', data: success });
-      else res.status(500).send({ success: false, message: 'Failed to update documents.', data: undefined });
-    } else {
-      res.status(500).send({ success: false, message: 'No batch property on body.', data: undefined });
-    }
-  });
+  router.put(
+    '',
+    guarded(async ({ body, user }, res) => {
+      if (!body?.batch) throw new AccessError('No batch property on body.', 400);
+      const data = await collection.updateAs(user as SBAuthSchema, body.batch);
+      res.status(200).send({ success: true, message: 'Successfully updated documents.', data });
+    })
+  );
 
   // PUT: Update one doc
-  router.put('/:id', async ({ params, body, user }, res) => {
-    const auth = user as SBAuthSchema;
-    const userId = auth?.id || '-';
-    const update = await collection.update(params.id, userId, body);
-    if (update) res.status(200).send({ success: true, message: 'Successfully updated the document.', data: [update] });
-    else res.status(500).send({ success: false, message: 'Failed to update document.', data: undefined });
-  });
+  router.put(
+    '/:id',
+    guarded(async ({ params, body, user }, res) => {
+      const data = await collection.updateAs(user as SBAuthSchema, [{ id: String(params.id), updates: body }]);
+      res.status(200).send({ success: true, message: 'Successfully updated the document.', data });
+    })
+  );
 
   // DELETE: Delete multiple docs with batch
-  router.delete('', async ({ body }, res) => {
-    if (body && body.batch) {
-      const success = await collection.deleteBatch(body.batch);
-      if (success) res.status(200).send({ success: true, message: 'Successfully deleted the documents.', data: success });
-      else res.status(500).send({ success: false, message: 'Failed to delete the documents.', data: undefined });
-    } else {
-      res.status(500).send({ success: false, message: 'No batch property on body.', data: undefined });
-    }
-  });
+  router.delete(
+    '',
+    guarded(async ({ body, user }, res) => {
+      if (!body?.batch) throw new AccessError('No batch property on body.', 400);
+      const data = await collection.deleteAs(user as SBAuthSchema, body.batch);
+      res.status(200).send({ success: true, message: 'Successfully deleted the documents.', data });
+    })
+  );
 
   // DELETE: Delete one doc
-  router.delete('/:id', async ({ params }, res) => {
-    const del = await collection.delete(params.id);
-    if (del) res.status(200).send({ success: true, message: 'Successfully deleted the document.', data: [del] });
-    else res.status(500).send({ success: false, message: 'Failed to delete document.', data: undefined });
-  });
+  router.delete(
+    '/:id',
+    guarded(async ({ params, user }, res) => {
+      const data = await collection.deleteAs(user as SBAuthSchema, [String(params.id)]);
+      res.status(200).send({ success: true, message: 'Successfully deleted the document.', data });
+    })
+  );
 
   return router;
 }

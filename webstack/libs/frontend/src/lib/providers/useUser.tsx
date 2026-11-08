@@ -16,7 +16,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 import { User, UserSchema } from '@sage3/shared/types';
-import { genId, SAGE3Ability } from '@sage3/shared';
+import { genId } from '@sage3/shared';
 
 import { APIHttp, SocketAPI } from '../api';
 import { useAuth } from './useAuth';
@@ -38,10 +38,6 @@ const UserContext = createContext({
 
 export function useUser() {
   return useContext(UserContext);
-}
-
-function setAbilityUser(user: User) {
-  SAGE3Ability.setUser(user);
 }
 
 export function UserProvider(props: React.PropsWithChildren<Record<string, unknown>>) {
@@ -68,7 +64,6 @@ export function UserProvider(props: React.PropsWithChildren<Record<string, unkno
             recentBoards: [],
           });
         }
-        setAbilityUser(user);
         setUser(user);
         setLoading(false);
       } else {
@@ -90,7 +85,6 @@ export function UserProvider(props: React.PropsWithChildren<Record<string, unkno
             const createResponse = await APIHttp.POST<User>('/users/create', tempUser);
             if (createResponse.data) {
               const newUser = createResponse.data[0];
-              setAbilityUser(newUser);
               setUser(newUser);
               setLoading(false);
             } else {
@@ -128,7 +122,6 @@ export function UserProvider(props: React.PropsWithChildren<Record<string, unkno
       userSub = await SocketAPI.subscribe<User>(route, (message) => {
         if (message.type === 'UPDATE') {
           const user = message.doc as User[];
-          setAbilityUser(user[0]);
           setUser(user[0]);
         }
         // If the user is deleted, logout
@@ -155,7 +148,6 @@ export function UserProvider(props: React.PropsWithChildren<Record<string, unkno
       if (auth) {
         const userResponse = await APIHttp.POST<User>('/users/create', user);
         if (userResponse.data) {
-          setAbilityUser(userResponse.data[0]);
           setUser(userResponse.data[0]);
         }
       }
@@ -173,7 +165,6 @@ export function UserProvider(props: React.PropsWithChildren<Record<string, unkno
       if (user) {
         const response = await APIHttp.PUT<User>(`/users/${user._id}`, updates);
         if (response.success && response.data) {
-          setAbilityUser(response.data[0]);
           setUser(response.data[0]);
         }
         return;

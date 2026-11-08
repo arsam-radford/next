@@ -8,7 +8,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
-import { v5 as uuidv5 } from 'uuid';
 // Packing algorithm
 import potpack from 'potpack';
 
@@ -60,7 +59,11 @@ import { FaPython } from 'react-icons/fa';
 
 import {
   ConfirmModal,
-  useAbility,
+  useBoardPermissions,
+  useAppPermissionsFn,
+  useUser,
+  AppReadOnlyMenuItem,
+  AppPermissionsMenuItems,
   useAppStore,
   useBoardStore,
   useHexColor,
@@ -68,7 +71,7 @@ import {
   useUIStore,
   setupApp,
   useCursorBoardPosition,
-  useConfigStore,
+  sessionAssets,
   apiUrls,
   useAssetStore,
   downloadFile,
@@ -79,7 +82,7 @@ import {
 } from '@sage3/frontend';
 import { AI_ENABLED_APPS, Applications, getApplication } from '@sage3/applications/apps';
 import { AppSchema } from '@sage3/applications/schema';
-import { SAGEColors } from '@sage3/shared';
+import { SAGEColors, Permission, appPermission, has } from '@sage3/shared';
 import { Board } from '@sage3/shared/types';
 import { initialValues } from '@sage3/applications/initialValues';
 import { IoSparklesSharp } from 'react-icons/io5';
@@ -138,12 +141,18 @@ export function LassoToolbar(props: LassoToolbarProps) {
   // Modal disclosure for the Close selected apps
   const { isOpen: deleteIsOpen, onClose: deleteOnClose, onOpen: deleteOnOpen } = useDisclosure();
 
-  // Abiities
-  const canDeleteApp = useAbility('delete', 'apps');
-  const canCreateApp = useAbility('create', 'apps');
-  const canMoveApp = useAbility('move', 'apps');
-  const canPin = useAbility('pin', 'apps');
-  const canDownload = useAbility('download', 'assets');
+  // Permissions: every selected app must allow it, each by its own and its board's permissions
+  const { user } = useUser();
+  const permissions = useBoardPermissions();
+  const appPermissions = useAppPermissionsFn();
+  const selection = apps.filter((app) => lassoApps.includes(app._id));
+  const allow = (action: 'Delete' | 'Arrange') =>
+    selection.every((app) => has(appPermissions(app), appPermission(action, app._createdBy === user?._id)));
+  const canDeleteApp = allow('Delete');
+  const canCreateApp = has(permissions, Permission.CreateApps);
+  const canMoveApp = allow('Arrange');
+  const canPin = canMoveApp;
+  const canDownload = has(permissions, Permission.DownloadOthersAssets);
 
   // Settings
   const { settings } = useUserSettings();
@@ -374,27 +383,14 @@ export function LassoToolbar(props: LassoToolbarProps) {
   /**
    * Save the selected apps into a session file
    */
-  const saveSelectedSession = () => {
+  const saveSelectedSession = async () => {
     const boardName = boards.find((b) => b._id === boardId)?.data.name || 'session';
     const filename = boardName + '.s3json';
     const selectedapps = useUIStore.getState().savedSelectedAppsIds;
     // Use selected apps if any or all apps
     const apps =
       selectedapps.length > 0 ? useAppStore.getState().apps.filter((a) => selectedapps.includes(a._id)) : useAppStore.getState().apps;
-    const namespace = useConfigStore.getState().config.namespace;
-    const assets = apps.reduce<{ id: string; url: string; filename: string }[]>(function (arr, app) {
-      const state = app.data.state;
-      if ('assetid' in state && state.assetid) {
-        // Generate a public URL of the file
-        const token = uuidv5(state.assetid, namespace);
-        const publicURL = apiUrls.assets.getPublicURL(state.assetid, token);
-        const asset = useAssetStore.getState().assets.find((a) => a._id === state.assetid);
-        if (asset) {
-          arr.push({ id: state.assetid, url: window.location.origin + publicURL, filename: asset.data.originalfilename });
-        }
-      }
-      return arr;
-    }, []);
+    const assets = await sessionAssets(apps, useAssetStore.getState().assets);
     // Data structure to save
     const savedapps = apps.map((app) => {
       // making sure apps have the right state
@@ -673,6 +669,7 @@ for b in bits:
                   </MenuButton>
                 </Tooltip>
                 <MenuList p="0" m="0">
+                  <AppPermissionsMenuItems apps={selection} />
                   <MenuGroup title="Actions" m="1">
                     <MenuItem onClick={fitSelectedApps} icon={<MdZoomOutMap />} py="0" m="0">
                       Zoom To Apps
@@ -680,6 +677,7 @@ for b in bits:
                     <MenuItem isDisabled={!canPin} onClick={pin} icon={<MdPinDrop />} py="0" m="0">
                       Pin Apps
                     </MenuItem>
+                    <AppReadOnlyMenuItem apps={selection} />
                     <MenuItem isDisabled={!canCreateApp} onClick={handleDuplicateApps} icon={<MdCopyAll />} py="0" m="0">
                       Duplicate Apps
                     </MenuItem>

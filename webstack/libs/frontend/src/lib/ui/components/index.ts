@@ -12,3 +12,4 @@ export * from './context-menu/radial-context-menu';
 export * from './paste-handler/paste-handler';
 export * from './general';
 export * from './party/index';
+export * from './permissions';

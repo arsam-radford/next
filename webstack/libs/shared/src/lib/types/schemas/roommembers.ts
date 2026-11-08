@@ -9,13 +9,20 @@
 import { z } from 'zod';
 import { SBDoc } from './SBSchema';
 
+// One document per user per room, with the id memberId(roomId, userId)
 const schema = z.object({
-  // Id of the Room
   roomId: z.string(),
-  // Member Id
-  members: z.array(z.string()),
+  userId: z.string(),
+  // Role ids, not including @everyone
+  roles: z.array(z.string()),
+  // Epoch milliseconds; 0 when not timed out
+  timeoutUntil: z.number(),
 });
 
 export type RoomMembersSchema = z.infer<typeof schema>;
 
 export type RoomMembers = SBDoc & { data: RoomMembersSchema };
+
+export function memberId(roomId: string, userId: string): string {
+  return `${roomId}_${userId}`;
+}

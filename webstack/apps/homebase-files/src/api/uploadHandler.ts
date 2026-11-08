@@ -20,14 +20,14 @@ import { v4 as getUUID } from 'uuid';
 
 // Lib Imports
 import { SBAuthSchema } from '@sage3/sagebase';
-import { getFileType } from '@sage3/shared';
+import { getFileType, has, Permission } from '@sage3/shared';
 // Local storage
 import { UploadConnector } from '../connectors/upload-connector';
 // Asset model
 import { AssetsCollection } from './assetsCollection';
 import { addUploadMessage } from './messageCollection';
 import { AssetSchema } from '@sage3/shared/types';
-import { toPluginAsset } from '@sage3/backend';
+import { boardPermissionsOf, readBoard, roomPermissionsOf, toPluginAsset } from '@sage3/backend';
 import { PluginAssetRequestError } from './plugin-asset-access';
 
 // Google storage and AWS S3 storage
@@ -37,11 +37,26 @@ export async function uploadHandler(req: express.Request, res: express.Response)
   return handleUpload(req, res);
 }
 
-export async function uploadPluginAsset(req: express.Request, res: express.Response, pluginRoomId: string) {
-  return handleUpload(req, res, pluginRoomId);
+// Where uploaded files belong. boardId is '' for a file shared with the whole room.
+type Scope = { roomId: string; boardId: string };
+
+export async function uploadPluginAsset(req: express.Request, res: express.Response, scope: Scope) {
+  return handleUpload(req, res, scope);
 }
 
-async function handleUpload(req: express.Request, res: express.Response, pluginRoomId?: string) {
+// Uploading to a board needs Upload Assets there; uploading without one needs it in the room.
+async function uploadScope(auth: SBAuthSchema, boardId?: string, roomId?: string): Promise<Scope | undefined> {
+  if (boardId) {
+    const board = await readBoard(boardId);
+    if (board && has(await boardPermissionsOf(auth, boardId), Permission.UploadAssets)) return { roomId: board.data.roomId, boardId };
+    return undefined;
+  }
+  if (roomId && has(await roomPermissionsOf(auth, roomId), Permission.UploadAssets)) return { roomId, boardId: '' };
+  return undefined;
+}
+
+async function handleUpload(req: express.Request, res: express.Response, pluginScope?: Scope) {
+  const pluginRoomId = pluginScope?.roomId;
   const uploadId = getUUID();
   const headerRoomId = pluginRoomId ?? (req.header('x-sage3-room') || undefined);
   // Signal the start of the upload
@@ -86,8 +101,14 @@ async function handleUpload(req: express.Request, res: express.Response, pluginR
 
     // Get the current uploader information
     const user = req.user as SBAuthSchema;
-    const roomId = pluginRoomId ?? (req.body.room || headerRoomId || '-');
-    const messageRoomId = roomId === '-' ? undefined : roomId;
+    const scope = pluginScope ?? (await uploadScope(user, req.body.board || req.header('x-sage3-board'), req.body.room || headerRoomId));
+    if (!scope) {
+      AssetsCollection.deleteAssetFiles((files ?? []).map((file) => ({ file: file.filename })));
+      await addUploadMessage(user.id, 'Upload failed: uploading needs Upload Assets.', { uploadId, roomId: headerRoomId, phase: 'failed', close: true });
+      return res.status(403).send('Uploading needs Upload Assets.');
+    }
+    const roomId = scope.roomId;
+    const messageRoomId = roomId;
 
     // Signal the start of the processing
     await addUploadMessage(user.id, `Processing Assets`, { uploadId, roomId: messageRoomId, phase: 'processing' });
@@ -171,6 +192,7 @@ async function handleUpload(req: express.Request, res: express.Response, pluginR
           file: elt.filename,
           owner: user.id || '-',
           room: roomId,
+          board: scope.boardId,
           originalfilename: elt.originalname,
           path: elt.path,
           destination: elt.destination,

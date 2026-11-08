@@ -13,6 +13,26 @@ import { Request, Response } from 'express';
 import { createProxyServer } from 'http-proxy-3';
 
 import { config } from '../../../config';
+import { canOnBoard } from '@sage3/backend';
+import { SBAuthSchema } from '@sage3/sagebase';
+import { Permission } from '@sage3/shared';
+import { KernelInfo } from '@sage3/shared/types';
+
+/**
+ * Reading kernels is open to signed-in users. Creating one, or running, restarting,
+ * interrupting or deleting one, needs Execute Code on its board; a private kernel is its owner's only.
+ */
+async function allowed(req: Request): Promise<boolean> {
+  const auth = req.user as SBAuthSchema;
+  const [, route, id] = req.path.split('/');
+  if (req.method === 'GET' || route === 'status') return true;
+  if (req.method === 'POST' && route === 'kernels') return canOnBoard(auth, String(req.body?.board), Permission.ExecuteCode);
+  const response = await fetch(`${config.kernels.url}/collection`, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) return false;
+  const kernel = ((await response.json()) as KernelInfo[]).find((k) => k.kernel_id === id);
+  if (!kernel || (kernel.is_private && kernel.owner !== auth.id)) return false;
+  return canOnBoard(auth, kernel.board, Permission.ExecuteCode);
+}
 
 // Custom logger to control the logging of the proxy
 const logger = {
@@ -95,7 +115,17 @@ export function KernelsRouter() {
 
   // http-proxy-3's web() is callback/event-based; failures surface via the
   // 'error' handler above rather than a rejected promise.
-  router.use((req: Request, res: Response) => {
+  router.use(async (req: Request, res: Response) => {
+    try {
+      if (!(await allowed(req))) {
+        res.status(403).send({ success: false, message: 'Running code needs Execute Code on this board.' });
+        return;
+      }
+    } catch (error) {
+      logger.error(error);
+      res.status(502).send({ success: false, message: 'Kernels unavailable.' });
+      return;
+    }
     proxy.web(req, res);
   });
 

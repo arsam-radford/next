@@ -13,7 +13,6 @@ import { mountStoreDevtool } from 'simple-zustand-devtools';
 
 // Application specific schema
 import { Asset } from '@sage3/shared/types';
-import { SAGE3Ability } from '@sage3/shared';
 
 // The observable websocket
 import { APIHttp, SocketAPI } from '../api';
@@ -47,7 +46,6 @@ const AssetStore = create<AssetState>()((set, get) => {
       }
     },
     update: async (roomId: string) => {
-      if (!SAGE3Ability.canCurrentUser('read', 'assets')) return;
       // Refresh the collection from the server with websockets
       const res = await APIHttp.QUERY<Asset>('/assets', { room: roomId });
       if (res.success) {
@@ -57,7 +55,6 @@ const AssetStore = create<AssetState>()((set, get) => {
       }
     },
     subscribe: async (roomId: string) => {
-      if (!SAGE3Ability.canCurrentUser('read', 'assets')) return;
       const res = await APIHttp.QUERY<Asset>('/assets', { room: roomId });
       if (res.success) {
         set({ assets: res.data });

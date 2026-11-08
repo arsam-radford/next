@@ -26,7 +26,7 @@ import {
   MenuItem,
 } from '@chakra-ui/react';
 import { debounce } from 'throttle-debounce';
-import { MdLock, MdLockOpen, MdRemove, MdAdd, MdFileDownload, MdCloudUpload, MdCode, MdSlideshow } from 'react-icons/md';
+import { MdRemove, MdAdd, MdFileDownload, MdCloudUpload, MdCode, MdSlideshow } from 'react-icons/md';
 
 // Markdown
 import Markdown from 'markdown-to-jsx';
@@ -49,7 +49,9 @@ import {
   setupApp,
   useUIStore,
   useLinkStore,
+  useAppPermissions,
 } from '@sage3/frontend';
+import { appPermission, has } from '@sage3/shared';
 
 import { App } from '../../schema';
 import { AppWindow } from '../../components';
@@ -99,6 +101,8 @@ function AppComponent(props: App): JSX.Element {
 
   // User
   const { user } = useUser();
+  // Read only for people who may not edit this app (a locked one, for instance)
+  const locked = !has(useAppPermissions(props), appPermission('Edit', user?._id === props._createdBy));
 
   // Styling
   const defaultTheme = useColorModeValue('vs', 'vs-dark');
@@ -200,7 +204,7 @@ function AppComponent(props: App): JSX.Element {
           height={'100%'}
           language={s.language}
           options={{
-            readOnly: s.readonly,
+            readOnly: locked,
             fontSize: s.fontSize,
             contextmenu: false,
             minimap: { enabled: false },
@@ -343,6 +347,7 @@ function ToolbarComponent(props: App): JSX.Element {
         fd.append('files', codefile);
         // Add fields to the upload form
         fd.append('room', roomId);
+        fd.append('board', boardId ?? '');
         // Upload with a POST request
         fetch(apiUrls.assets.upload, { method: 'POST', body: fd })
           .catch((error: Error) => {
@@ -378,11 +383,6 @@ function ToolbarComponent(props: App): JSX.Element {
   function handleDecreaseFont() {
     const fs = Math.max(8, s.fontSize - 4);
     updateState(props._id, { fontSize: fs });
-  }
-
-  // Handle Toggle Readonly
-  function handleReadonly() {
-    updateState(props._id, { readonly: !s.readonly });
   }
 
   function handleLanguageChange(lang: string) {
@@ -446,13 +446,6 @@ function ToolbarComponent(props: App): JSX.Element {
         </Tooltip>
       </ButtonGroup>
 
-      <ButtonGroup isAttached size="xs" colorScheme="teal" ml={1}>
-        <Tooltip placement="top" hasArrow={true} label={s.readonly ? 'Read only' : 'Edit'} openDelay={400}>
-          <Button onClick={handleReadonly} mx="2px" colorScheme={'teal'} size='xs' px={0}>
-            {s.readonly ? <MdLock size="16px" /> : <MdLockOpen size="16px" />}
-          </Button>
-        </Tooltip>
-      </ButtonGroup>
       <ButtonGroup isAttached size="xs" colorScheme="teal" ml={1}>
         <Tooltip placement="top" hasArrow={true} label={'Save Code in Asset Manager'} openDelay={400}>
           <Button onClick={saveOnOpen} _hover={{ opacity: 0.7 }} isDisabled={s.content.length === 0} size='xs' px={0}>

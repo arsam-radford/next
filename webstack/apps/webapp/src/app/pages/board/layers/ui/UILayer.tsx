@@ -34,6 +34,8 @@ import {
   MdRemove,
   MdRemoveRedEye,
   MdScreenShare,
+  MdManageAccounts,
+  MdShield,
 } from 'react-icons/md';
 
 import { format as formatDate } from 'date-fns';
@@ -52,7 +54,13 @@ import {
   useScreenshareBackend,
   Clock,
   useThrottleApps,
-  useAbility,
+  useCan,
+  useRoomPermissions,
+  RoomSettingsModal,
+  useCanOpenRoomSettings,
+  BoardPermissionsModal,
+  ViewAsButton,
+  ViewAsBanner,
   apiUrls,
   useHotkeys,
   Alfred,
@@ -64,7 +72,7 @@ import {
   MainButton,
   PartyButton,
 } from '@sage3/frontend';
-import { SAGEColors } from '@sage3/shared';
+import { SAGEColors, Permission, has } from '@sage3/shared';
 
 import {
   BoardRadialMenu,
@@ -96,7 +104,10 @@ type UILayerProps = {
 
 export function UILayer(props: UILayerProps) {
   // Abilities
-  const canLasso = useAbility('lasso', 'apps');
+  const canLasso = useCan(Permission.ArrangeOwnApps);
+  const roomPermissions = useRoomPermissions(props.roomId);
+  const { isOpen: roomSettingsIsOpen, onOpen: roomSettingsOnOpen, onClose: roomSettingsOnClose } = useDisclosure();
+  const { isOpen: boardPermissionsIsOpen, onOpen: boardPermissionsOnOpen, onClose: boardPermissionsOnClose } = useDisclosure();
 
   // Settings
   // const { settings, setPrimaryActionMode } = useUserSettings();
@@ -139,6 +150,7 @@ export function UILayer(props: UILayerProps) {
   // Room Store
   const rooms = useRoomStore((state) => state.rooms);
   const room = rooms.find((el) => el._id === props.roomId);
+  const canOpenRoomSettings = useCanOpenRoomSettings(room);
   // Apps
   const apps = useThrottleApps(250);
   const deleteApp = useAppStore((state) => state.delete);
@@ -440,6 +452,20 @@ export function UILayer(props: UILayerProps) {
           <ToolbarButton bgColor={usersColor as SAGEColors} icon={<HiChip />} tooltip={'Kernels'} title={'Kernels'}>
             {room && board && <KernelsMenu roomId={room?._id} boardId={board?._id} />}
           </ToolbarButton>
+          {canOpenRoomSettings && (
+            <Tooltip label={'Roles and Members'}>
+              <IconButton size="sm" icon={<MdManageAccounts />} fontSize="lg" aria-label={'Roles and Members'} onClick={roomSettingsOnOpen} />
+            </Tooltip>
+          )}
+          <ViewAsButton roomId={props.roomId} />
+          <ViewAsBanner />
+          {has(roomPermissions, Permission.ManageBoards) && (
+            <Tooltip label={'Board Permissions and Moderation'}>
+              <IconButton size="sm" icon={<MdShield />} fontSize="lg" aria-label={'Board Permissions'} onClick={boardPermissionsOnOpen} />
+            </Tooltip>
+          )}
+          {room && roomSettingsIsOpen && <RoomSettingsModal isOpen={roomSettingsIsOpen} onClose={roomSettingsOnClose} room={room} />}
+          {board && boardPermissionsIsOpen && <BoardPermissionsModal isOpen={boardPermissionsIsOpen} onClose={boardPermissionsOnClose} board={board} />}
         </Box>
         <Divider orientation="vertical" mx="2" />
         <ButtonGroup isAttached size="xs" gap="0" mr="1">

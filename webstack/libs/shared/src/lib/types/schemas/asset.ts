@@ -65,6 +65,8 @@ const schema = z.object({
   file: z.string(),
   owner: z.string(),
   room: z.string(),
+  // The board the file belongs to; '' when shared with the whole room
+  board: z.string(),
   originalfilename: z.string(),
   path: z.string(),
   dateCreated: z.string(),

@@ -13,7 +13,6 @@ import { useParams } from 'react-router';
 // Date manipulation functions for file manager
 import { format as formatDate, formatDistanceStrict } from 'date-fns';
 // UUID generator
-import { v5 as uuidv5 } from 'uuid';
 
 // Chakra UI
 import {
@@ -56,14 +55,14 @@ import {
   useAppStore,
   useCursorBoardPosition,
   AssetHTTPService,
-  useAbility,
+  useCan,
   apiUrls,
   setupAppForFile,
-  useConfigStore,
+  publicFileURL,
   viewCenter,
   placeNewApps,
 } from '@sage3/frontend';
-import { getExtension, humanFileSize } from '@sage3/shared';
+import { getExtension, humanFileSize, Permission } from '@sage3/shared';
 import { FileEntry } from '@sage3/shared/types';
 
 import './menu.scss';
@@ -105,9 +104,11 @@ export function RowFile({ file, clickCB, dragCB }: RowFileProps) {
   const { getBoardCursor } = useCursorBoardPosition();
 
   // Abilities
-  const canCreateApp = useAbility('create', 'apps');
-  const canDelete = useAbility('delete', 'assets');
-  const canDownload = useAbility('download', 'assets');
+  const canCreateApp = useCan(Permission.CreateApps);
+  // Your own files are always yours to download and delete
+  const own = file.owner === user?._id;
+  const canDelete = useCan(Permission.ManageOthersAssets) || own;
+  const canDownload = useCan(Permission.DownloadOthersAssets) || own;
 
   // Select the file when clicked
   const onSingleClick = (e: MouseEvent): void => {
@@ -142,11 +143,12 @@ export function RowFile({ file, clickCB, dragCB }: RowFileProps) {
         downloadFile(url, file.originalfilename);
       }
     } else if (id === 'copy') {
-      // Get the namespace UUID of the server
-      const namespace = useConfigStore.getState().config.namespace;
-      // Generate a public URL of the file
-      const token = uuidv5(file.id, namespace);
-      const publicUrl = window.location.origin + apiUrls.assets.getPublicURL(file.id, token);
+      // The server issues share links only to people who may download the file
+      publicFileURL(file.id).then((publicUrl) => {
+      if (!publicUrl) {
+        toast({ title: 'You do not have the permission to share this file', status: 'warning', duration: 3000, isClosable: true });
+        return;
+      }
       // Copy the file URL to the clipboard
       if (navigator.clipboard) {
         navigator.clipboard.writeText(publicUrl);
@@ -159,6 +161,7 @@ export function RowFile({ file, clickCB, dragCB }: RowFileProps) {
           status: 'success',
         });
       }
+      });
     } else if (id === 'del') {
       if (canDelete) {
         // Delete a file

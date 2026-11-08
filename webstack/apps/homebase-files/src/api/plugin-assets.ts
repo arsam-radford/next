@@ -11,7 +11,7 @@ export function PluginAssetsRouter(): express.Router {
   const router = express.Router();
   const prefix = '/:pluginId/boards/:boardId';
 
-  async function authorize(req: express.Request, action: 'GET' | 'POST'): Promise<string> {
+  async function authorize(req: express.Request, action: 'GET' | 'POST'): Promise<{ roomId: string; boardId: string }> {
     // Named route parameters are non-empty strings, used here only as document keys.
     const { pluginId, boardId } = req.params as { pluginId: string; boardId: string };
     const plugins = await SAGEBase.Database.collection<PluginSchema>('PLUGINS');
@@ -39,7 +39,7 @@ export function PluginAssetsRouter(): express.Router {
 
   router.get(`${prefix}/:assetId`, async (req, res) => {
     try {
-      const roomId = await authorize(req, 'GET');
+      const { roomId } = await authorize(req, 'GET');
       const rawPage = req.query.page;
       if (rawPage !== undefined && (typeof rawPage !== 'string' || !/^(0|[1-9][0-9]*)$/.test(rawPage))) {
         throw new PluginAssetRequestError('Invalid PDF page.');
@@ -51,7 +51,7 @@ export function PluginAssetsRouter(): express.Router {
         throw new PluginAssetRequestError('Asset not found.', 404);
       }
 
-      const file = await pluginAssetFile(asset, roomId, config.public, page);
+      const file = await pluginAssetFile(asset, roomId, config.public, page, req.user as SBAuthSchema);
 
       res.setHeader('Content-Type', safeAssetMimeType(file.mimeType));
       res.setHeader('Content-Disposition', 'attachment');

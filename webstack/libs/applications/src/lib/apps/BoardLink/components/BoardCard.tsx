@@ -5,6 +5,7 @@
  * Distributed under the terms of the SAGE3 License.  The full license is in
  * the file LICENSE, distributed as part of this software.
  */
+import { isPrivateBoard } from '@sage3/shared';
 import { useState, useEffect } from 'react';
 import { Box, Heading, Tooltip, Text, useColorModeValue, IconButton, Icon, Image, Spacer } from '@chakra-ui/react';
 import { MdLock, MdPerson, MdRefresh } from 'react-icons/md';
@@ -139,7 +140,7 @@ export function BoardCard(props: App<'BoardLink'>): JSX.Element {
         textAlign={'center'}
         flexDir={'column'}
       >
-        {board?.data.isPrivate ? (
+        {(board && isPrivateBoard(board.data)) ? (
           <>
             <Icon
               aria-label="LockBoard"

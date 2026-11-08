@@ -6,6 +6,7 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+import { isPrivateBoard } from '@sage3/shared';
 import { memo, useMemo, useEffect, useRef } from 'react';
 import { Box, Text, Icon, useColorModeValue } from '@chakra-ui/react';
 import { MdLock } from 'react-icons/md';
@@ -84,7 +85,7 @@ export const BoardPreview = memo(function BoardPreview(props: {
         });
       }
     }
-  }, [props.appInfo, props.board.data.isPrivate, boardColor, appBorderColor, mapScale, appsX, appsY, boardWidth, boardHeight]);
+  }, [props.appInfo, isPrivateBoard(props.board.data), boardColor, appBorderColor, mapScale, appsX, appsY, boardWidth, boardHeight]);
 
   return (
     <Box
@@ -100,7 +101,7 @@ export const BoardPreview = memo(function BoardPreview(props: {
       textAlign={'center'}
       flexDir={'column'}
     >
-      {props.board.data.isPrivate ? (
+      {isPrivateBoard(props.board.data) ? (
         <>
           <Icon
             aria-label="LockBoard"

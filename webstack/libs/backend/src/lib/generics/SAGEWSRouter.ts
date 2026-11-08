@@ -8,16 +8,58 @@
 
 import { WebSocket } from 'ws';
 
-import { SBAuthSchema, SBDocumentUpdate, SBJSON } from '@sage3/sagebase';
+import { SBAuthSchema, SBDocument, SBDocumentMessage, SBJSON } from '@sage3/sagebase';
 import { APIClientWSMessage } from '@sage3/shared/types';
 
 import { SubscriptionCache } from '../utils/subscription-cache';
-import { SAGE3Collection } from './SAGECollection';
-import { checkPermissionsWS, AuthSubject } from './permissions';
+import { AccessError, SAGE3Collection } from './SAGECollection';
 
 import { URL } from 'node:url';
 
+/**
+ * A subscription callback that only passes on the documents the user may read.
+ * A document the user can no longer read after an update reaches them as a deletion, by id only.
+ * Events are checked one at a time, so they reach the client in order.
+ */
+export function readable<T extends SBJSON>(
+  collection: SAGE3Collection<T>,
+  user: SBAuthSchema,
+  send: (message: SBDocumentMessage<T>) => void
+): (message: SBDocumentMessage<T>) => void {
+  let queue = Promise.resolve();
+  return (message) => {
+    queue = queue
+      .then(async () => {
+        const docs = await collection.readAs(user, message.doc);
+        if (message.type === 'UPDATE') {
+          const hidden = message.doc.filter((doc) => !docs.includes(doc)).map((doc) => ({ _id: doc._id }) as SBDocument<T>);
+          if (hidden.length) send({ type: 'DELETE', col: message.col, doc: hidden });
+          if (docs.length) send({ ...message, doc: docs, updates: message.updates.filter((u) => docs.some((doc) => doc._id === u.id)) });
+        } else if (docs.length) {
+          send({ ...message, doc: docs });
+        }
+      })
+      .catch((error) => console.error('Subscription>', error));
+  };
+}
+
 export async function sageWSRouter<T extends SBJSON>(
+  collection: SAGE3Collection<T>,
+  socket: WebSocket,
+  message: APIClientWSMessage,
+  user: SBAuthSchema,
+  cache: SubscriptionCache
+): Promise<void> {
+  try {
+    await route(collection, socket, message, user, cache);
+  } catch (error) {
+    const text = error instanceof AccessError ? error.message : 'Server error.';
+    if (!(error instanceof AccessError)) console.error('WSRouter>', error);
+    socket.send(JSON.stringify({ id: message.id, success: false, message: text }));
+  }
+}
+
+async function route<T extends SBJSON>(
   collection: SAGE3Collection<T>,
   socket: WebSocket,
   message: APIClientWSMessage,
@@ -27,160 +69,69 @@ export async function sageWSRouter<T extends SBJSON>(
   // path to the current collection
   const path = '/api/' + collection.name.toLowerCase();
 
-  //  Check permissions on collections
-  if (!checkPermissionsWS(user, message.method, collection.name as AuthSubject)) {
-    socket.send(JSON.stringify({ id: message.id, success: false, message: 'Not Allowed' }));
-    return;
-  }
-
   // Create a URL object to parse the route:
   // second argument required because the route is a relative URL but otherwise meaningless
   const socket_url = new URL(message.route, 'ws://localhost');
   const route = message.route;
   // get all the parameters and their values into an array, instead of a Map
   const params = Array.from(socket_url.searchParams);
-  const numParams = params.length;
+  const reply = (data?: unknown) => socket.send(JSON.stringify({ id: message.id, success: true, data }));
 
   switch (message.method) {
     case 'POST': {
-      // POST: Add new document
-      // If body is undefined, return an error
-      if (message.body === undefined) {
-        socket.send(JSON.stringify({ id: message.id, success: false, message: 'No body provided' }));
-        return;
-      } else {
-        // If 'batch' is present on the body this is a batch post
-        if (message.body.batch) {
-          const body = message.body.batch as T[];
-          const docs = await collection.addBatch(body, user.id);
-          if (docs) socket.send(JSON.stringify({ id: message.id, success: true, data: docs }));
-          else socket.send(JSON.stringify({ id: message.id, success: false, message: 'Failed to create docs.' }));
-        } else {
-          const body = message.body as T;
-          const doc = await collection.add(body, user.id);
-          if (doc) socket.send(JSON.stringify({ id: message.id, success: true, data: doc }));
-          else socket.send(JSON.stringify({ id: message.id, success: false, message: 'Failed to create doc.' }));
-        }
-      }
+      if (message.body === undefined) throw new AccessError('No body provided', 400);
+      // If 'batch' is present on the body this is a batch post
+      if (message.body.batch) reply(await collection.createAs(user, message.body.batch as T[]));
+      else reply((await collection.createAs(user, [message.body as T]))[0]);
       break;
     }
     case 'GET': {
-      // Batch GET: Get multiple docs.
       const body = message.body;
-      if (body && body.batch) {
-        const ids = body.batch as string[];
-        const docs = await collection.getBatch(ids);
-        if (docs) socket.send(JSON.stringify({ id: message.id, success: true, data: docs }));
-        else socket.send(JSON.stringify({ id: message.id, success: false, message: 'Failed to get docs' }));
-      }
+      let docs;
+      // Batch GET: Get multiple docs.
+      if (body && body.batch) docs = await collection.getBatch(body.batch as string[]);
       // GET: Get all the docs.
-      else if (route === path) {
-        const docs = await collection.getAll();
-        if (docs) socket.send(JSON.stringify({ id: message.id, success: true, data: docs }));
-        else socket.send(JSON.stringify({ id: message.id, success: false, message: 'Failed to get docs' }));
-      }
+      else if (route === path) docs = await collection.getAll();
       // GET: Get one doc.
       else if (route.startsWith(path + '/')) {
-        const id = getIdFromRoute(route);
-        if (!id) {
-          socket.send(JSON.stringify({ id: message.id, success: false, message: 'No id provided' }));
-          return;
-        }
-        const doc = await collection.get(id);
-        if (doc) socket.send(JSON.stringify({ id: message.id, success: true, data: doc }));
-        else socket.send(JSON.stringify({ id: message.id, success: false, message: 'Failed to get doc.' }));
-      }
-      break;
-    }
-    // PUT: Update one doc.
-    case 'PUT': {
-      // PUT: Update a document
-      // If body is undefined, return an error
-      if (message.body === undefined) {
-        socket.send(JSON.stringify({ id: message.id, success: false, message: 'No body provided' }));
+        const doc = await collection.get(getIdFromRoute(route));
+        const visible = doc ? await collection.readAs(user, [doc]) : [];
+        if (visible.length === 0) throw new AccessError('Failed to get doc.', 404);
+        reply(visible[0]);
         return;
-      } else {
-        // If path ends with /batch, this is a batch post
-        const body = message.body;
-        // Batch PUT: Update multiple docs.
-        if (body.batch) {
-          const batch = body.batch as { id: string; updates: SBDocumentUpdate<T> }[];
-          const docs = await collection.updateBatch(batch, user.id);
-          if (docs) socket.send(JSON.stringify({ id: message.id, success: true, data: docs }));
-          else socket.send(JSON.stringify({ id: message.id, success: false, message: 'Failed to update docs.' }));
-        } else {
-          // This is a single update to a specific document
-          // Check for ID in route.
-          const id = getIdFromRoute(route);
-          if (!id) {
-            socket.send(JSON.stringify({ id: message.id, success: false, message: 'No id provided' }));
-            return;
-          }
-          // Get Body
-          const body = message.body as SBDocumentUpdate<T>;
-          const doc = await collection.update(id, user.id, body);
-          if (doc) socket.send(JSON.stringify({ id: message.id, success: true, data: doc }));
-          else socket.send(JSON.stringify({ id: message.id, success: false, message: 'Failed to create doc.' }));
-        }
       }
+      if (!docs) throw new AccessError('Failed to get docs', 500);
+      reply(await collection.readAs(user, docs));
       break;
     }
-    // DELETE: Delete one doc.
+    case 'PUT': {
+      if (message.body === undefined) throw new AccessError('No body provided', 400);
+      // Batch PUT: Update multiple docs.
+      if (message.body.batch) reply(await collection.updateAs(user, message.body.batch as any));
+      else reply((await collection.updateAs(user, [{ id: getIdFromRoute(route), updates: message.body as any }]))[0]);
+      break;
+    }
     case 'DELETE': {
-      // Check if body is an array, if so this is a batch delete
       const body = message.body;
-      if (body && body.batch) {
-        const batch = body.batch as string[];
-        const docs = await collection.deleteBatch(batch);
-        if (docs) socket.send(JSON.stringify({ id: message.id, success: true, data: docs }));
-        else socket.send(JSON.stringify({ id: message.id, success: false, message: 'Failed to delete docs.' }));
-      } else {
-        const id = getIdFromRoute(route);
-        if (!id) {
-          socket.send(JSON.stringify({ id: message.id, success: false, message: 'No id provided' }));
-          return;
-        }
-        const del = await collection.delete(id);
-        if (del) socket.send(JSON.stringify({ id: message.id, success: true }));
-        else socket.send(JSON.stringify({ id: message.id, success: false, message: 'Failed to delete doc' }));
+      if (body && body.batch) reply(await collection.deleteAs(user, body.batch as string[]));
+      else {
+        await collection.deleteAs(user, [getIdFromRoute(route)]);
+        reply();
       }
       break;
     }
     case 'SUB': {
+      const forward = readable(collection, user, (event) => socket.send(JSON.stringify({ id: message.id, event })));
+      let sub;
       // Subscribe to all docs
-      if (route === path) {
-        const sub = await collection.subscribeAll((doc) => {
-          const msg = { id: message.id, event: doc };
-          socket.send(JSON.stringify(msg));
-        });
-        if (sub) cache.add(message.id, [sub]);
-      } else if (numParams > 0) {
-        if (numParams != 1) {
-          socket.send(JSON.stringify({ id: message.id, success: false, message: 'Improper query format' }));
-          return;
-        } else {
-          const prop = params[0][0]; // first key
-          const query = params[0][1]; // first value
-          const sub = await collection.subscribeByQuery(prop, query, (doc) => {
-            const msg = { id: message.id, event: doc };
-            socket.send(JSON.stringify(msg));
-          });
-          if (sub) cache.add(message.id, [sub]);
-        }
+      if (route === path) sub = await collection.subscribeAll(forward);
+      else if (params.length > 0) {
+        if (params.length != 1) throw new AccessError('Improper query format', 400);
+        sub = await collection.subscribeByQuery(params[0][0] as keyof T, params[0][1], forward);
       }
       // Subscribe to one doc
-      else if (route.startsWith(path + '/')) {
-        const id = getIdFromRoute(route);
-        if (!id) {
-          socket.send(JSON.stringify({ id: message.id, success: false, message: 'No id provided' }));
-          return;
-        }
-        const sub = await collection.subscribe(id, (doc) => {
-          const msg = { id: message.id, event: doc };
-          socket.send(JSON.stringify(msg));
-        });
-        if (sub) cache.add(message.id, [sub]);
-      }
+      else if (route.startsWith(path + '/')) sub = await collection.subscribe(getIdFromRoute(route), forward);
+      if (sub) cache.add(message.id, [sub]);
       break;
     }
     case 'UNSUB': {
@@ -188,18 +139,16 @@ export async function sageWSRouter<T extends SBJSON>(
       cache.delete(message.id);
       break;
     }
-    default: {
-      socket.send(JSON.stringify({ id: message.id, success: false, message: 'Invalid method' }));
-    }
+    default:
+      throw new AccessError('Invalid method', 400);
   }
 }
 
 /*
  * Get the id from the end of the route
- *
- * @param {string} route
- * @returns {(string | undefined)}
- * */
-function getIdFromRoute(route: string): string | undefined {
-  return route.split('/').at(-1);
+ */
+function getIdFromRoute(route: string): string {
+  const id = route.split('/').at(-1);
+  if (!id) throw new AccessError('No id provided', 400);
+  return id;
 }

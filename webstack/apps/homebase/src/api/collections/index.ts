@@ -7,7 +7,8 @@
  */
 
 import { URLMetadata } from '@sage3/backend';
-import { generateReadableID } from '@sage3/shared';
+import { generateReadableID, openRoomRoles } from '@sage3/shared';
+import { migratePermissions } from './migrate-permissions';
 import { throttle } from 'throttle-debounce';
 import {
   AppsCollection,
@@ -22,7 +23,11 @@ import {
   RoomMembersCollection,
   AnnotationsCollection,
   LinkCollection,
+  AuditCollection,
+  InvitesCollection,
 } from '../collections';
+import { config } from '../../config';
+import { RoomTemplatesCollection } from './roomtemplates';
 
 export * from './apps';
 export * from './boards';
@@ -36,6 +41,8 @@ export * from './insight';
 export * from './roommembers';
 export * from './annotations';
 export * from './link';
+export * from './audit';
+export * from './invites';
 
 /**
  * Load the various models at startup.
@@ -53,6 +60,11 @@ export async function loadCollections(): Promise<void> {
   await RoomMembersCollection.initialize();
   await AnnotationsCollection.initialize();
   await LinkCollection.initialize();
+  await InvitesCollection.initialize();
+  await RoomTemplatesCollection.initialize();
+  await AuditCollection.initialize(false, (config.features.auditDays ?? 30) * 24 * 3600);
+
+  await migratePermissions();
 
   // Setup default room and board
   RoomsCollection.getAll().then(async (rooms) => {
@@ -67,8 +79,9 @@ export async function loadCollections(): Promise<void> {
             color: 'green',
             ownerId: '-',
             isPrivate: false,
-            privatePin: '',
             isListed: true,
+            roles: openRoomRoles,
+            bans: [],
           },
           '-',
         );
@@ -82,8 +95,7 @@ export async function loadCollections(): Promise<void> {
               roomId: res._id,
               ownerId: '-',
               code: generateReadableID(),
-              isPrivate: false,
-              privatePin: '',
+              overrides: [],
               executeInfo: { executeFunc: '', params: {} },
             },
             '-',

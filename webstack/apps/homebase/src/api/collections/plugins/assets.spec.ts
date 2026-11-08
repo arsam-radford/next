@@ -6,6 +6,13 @@ import type { SBAuthSchema } from '@sage3/sagebase';
 import { toPluginAsset } from '../../../../../../libs/backend/src/lib/utils/plugin-assets';
 import { pluginAssetFile, requirePluginAssetAccess } from '../../../../../homebase-files/src/api/plugin-asset-access';
 
+// Spectators are read-only; everyone else here holds every permission.
+jest.mock('@sage3/backend/permissions', () => {
+  const { ALL, READ_ONLY_KEEPS } = jest.requireActual('@sage3/shared');
+  const of = async (auth: { provider: string }) => (auth.provider === 'spectator' ? READ_ONLY_KEEPS : ALL);
+  return { boardPermissionsOf: of, roomPermissionsOf: of };
+});
+
 const metadata = { _id: 'asset', _createdAt: 0, _updatedAt: 0, _createdBy: 'owner', _updatedBy: 'owner' };
 const digest = 'a'.repeat(64);
 const user: SBAuthSchema = { id: 'owner', provider: 'google', providerId: 'owner' };
@@ -42,8 +49,7 @@ const board: Board = {
     color: '',
     roomId: 'room',
     ownerId: 'owner',
-    isPrivate: false,
-    privatePin: '',
+    overrides: [],
     code: '',
     whiteboardLines: [],
     executeInfo: { executeFunc: '', params: {} },
@@ -55,6 +61,7 @@ const asset: Asset = {
     file: 'document.pdf',
     owner: 'owner',
     room: 'room',
+    board: '',
     originalfilename: 'Original.pdf',
     path: '/private/document.pdf',
     dateCreated: '0',
@@ -78,12 +85,12 @@ const asset: Asset = {
   },
 };
 
-it('exposes only public metadata and scopes access to the grant, room, capability and write permission', () => {
+it('exposes only public metadata and scopes access to the grant, room, capability and write permission', async () => {
   expect(toPluginAsset(asset)).toEqual({ id: 'asset', name: 'Original.pdf', mimeType: 'application/pdf', size: 3, pageCount: 1 });
-  expect(requirePluginAssetAccess(plugin, board, user, digest, 'POST')).toBe('room');
-  expect(() => requirePluginAssetAccess(plugin, board, user, 'stale', 'GET')).toThrow();
-  expect(() => requirePluginAssetAccess(plugin, { ...board, data: { ...board.data, roomId: 'foreign' } }, user, digest, 'GET')).toThrow();
-  expect(() => requirePluginAssetAccess(plugin, board, { ...user, provider: 'spectator' }, digest, 'POST')).toThrow();
+  expect(await requirePluginAssetAccess(plugin, board, user, digest, 'POST')).toEqual({ roomId: 'room', boardId: 'board' });
+  await expect(requirePluginAssetAccess(plugin, board, user, 'stale', 'GET')).rejects.toThrow();
+  await expect(requirePluginAssetAccess(plugin, { ...board, data: { ...board.data, roomId: 'foreign' } }, user, digest, 'GET')).rejects.toThrow();
+  await expect(requirePluginAssetAccess(plugin, board, { ...user, provider: 'spectator' }, digest, 'POST')).rejects.toThrow();
   const noCapabilities = {
     ...plugin,
     data: {
@@ -94,7 +101,7 @@ it('exposes only public metadata and scopes access to the grant, room, capabilit
       },
     },
   };
-  expect(() => requirePluginAssetAccess(noCapabilities, board, user, digest, 'GET')).toThrow();
+  await expect(requirePluginAssetAccess(noCapabilities, board, user, digest, 'GET')).rejects.toThrow();
 });
 
 it('reads originals and zero-based PDF images while refusing missing, foreign and unsafe files', async () => {
@@ -105,26 +112,26 @@ it('reads originals and zero-based PDF images while refusing missing, foreign an
   try {
     await fs.writeFile(path.join(root, 'document.pdf'), 'pdf');
     await fs.writeFile(path.join(root, 'document-0-800.webp'), 'webp');
-    const original = await pluginAssetFile(asset, 'room', root);
-    const page = await pluginAssetFile(asset, 'room', root, 0);
+    const original = await pluginAssetFile(asset, 'room', root, undefined, user);
+    const page = await pluginAssetFile(asset, 'room', root, 0, user);
     expect(await fs.readFile(original.path, 'utf8')).toBe('pdf');
     expect(original.mimeType).toBe('application/pdf');
     expect(await fs.readFile(page.path, 'utf8')).toBe('webp');
     expect(page.mimeType).toBe('image/webp');
 
-    await expect(pluginAssetFile(asset, 'foreign', root)).rejects.toMatchObject({ status: 404 });
-    await expect(pluginAssetFile(asset, 'room', root, 1)).rejects.toMatchObject({ status: 404 });
-    await expect(pluginAssetFile({ ...asset, data: { ...asset.data, file: '../../outside' } }, 'room', root)).rejects.toMatchObject({
+    await expect(pluginAssetFile(asset, 'foreign', root, undefined, user)).rejects.toMatchObject({ status: 404 });
+    await expect(pluginAssetFile(asset, 'room', root, 1, user)).rejects.toMatchObject({ status: 404 });
+    await expect(pluginAssetFile({ ...asset, data: { ...asset.data, file: '../../outside' } }, 'room', root, undefined, user)).rejects.toMatchObject({
       status: 404,
     });
 
     await fs.writeFile(path.join(directory, 'outside.pdf'), 'secret');
     await fs.unlink(path.join(root, 'document.pdf'));
     await fs.symlink(path.join(directory, 'outside.pdf'), path.join(root, 'document.pdf'));
-    await expect(pluginAssetFile(asset, 'room', root)).rejects.toMatchObject({ status: 404 });
+    await expect(pluginAssetFile(asset, 'room', root, undefined, user)).rejects.toMatchObject({ status: 404 });
 
     await fs.unlink(path.join(root, 'document.pdf'));
-    await expect(pluginAssetFile(asset, 'room', root)).rejects.toMatchObject({ status: 404 });
+    await expect(pluginAssetFile(asset, 'room', root, undefined, user)).rejects.toMatchObject({ status: 404 });
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }

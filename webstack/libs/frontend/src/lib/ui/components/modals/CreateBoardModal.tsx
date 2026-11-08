@@ -25,14 +25,13 @@ import {
   Text,
 } from '@chakra-ui/react';
 
-import { v5 as uuidv5 } from 'uuid';
-import { MdPerson, MdLock } from 'react-icons/md';
+import { MdPerson } from 'react-icons/md';
 
 import { useUser } from '@sage3/frontend';
 import { BoardSchema } from '@sage3/shared/types';
-import { SAGEColors, randomSAGEColor, generateReadableID, isAlphanumericWithSpacesAndForeign } from '@sage3/shared';
+import { SAGEColors, randomSAGEColor, generateReadableID, isAlphanumericWithSpacesAndForeign, withPrivacy } from '@sage3/shared';
 
-import { useBoardStore, useConfigStore } from '../../../stores';
+import { useBoardStore } from '../../../stores';
 import { ColorPicker } from '../general';
 
 interface CreateBoardModalProps {
@@ -44,9 +43,6 @@ interface CreateBoardModalProps {
 const NAME_MAX = 50;
 
 export function CreateBoardModal(props: CreateBoardModalProps): JSX.Element {
-  // Configuration information
-  const config = useConfigStore((state) => state.config);
-
   const { user, saveBoard } = useUser();
   const toast = useToast();
 
@@ -55,7 +51,6 @@ export function CreateBoardModal(props: CreateBoardModalProps): JSX.Element {
 
   const [name, setName] = useState<BoardSchema['name']>('');
   const [isProtected, setProtected] = useState(false);
-  const [password, setPassword] = useState('');
   const [roomID, setRoomID] = useState('');
   const [color, setColor] = useState('red' as SAGEColors);
 
@@ -67,17 +62,6 @@ export function CreateBoardModal(props: CreateBoardModalProps): JSX.Element {
 
   // Run on every open of the dialog
   useEffect(() => {
-    // Generate a PIN
-    const makeid = (length: number): string => {
-      let result = '';
-      const characters = 'ABCDEFGHIJKLMNPQRSTUVWXYZ0123456789'; // removed letter O
-      const charactersLength = characters.length;
-      for (let i = 0; i < length; i++) {
-        result += characters.charAt(Math.floor(Math.random() * charactersLength));
-      }
-      return result;
-    };
-    setPassword(makeid(6));
     setRoomID(generateReadableID());
     // Reset the form fields
     setName('');
@@ -127,8 +111,6 @@ export function CreateBoardModal(props: CreateBoardModalProps): JSX.Element {
           isClosable: true,
         });
       } else {
-        // hash the PIN: the namespace comes from the server configuration
-        const key = uuidv5(password, config.namespace);
         // set the pending state to true so that the button is disabled
         setPendingCreate(true);
         // Create the board
@@ -138,9 +120,8 @@ export function CreateBoardModal(props: CreateBoardModalProps): JSX.Element {
           roomId: props.roomId,
           ownerId: user._id,
           color: color,
-          isPrivate: isProtected,
           code: roomID,
-          privatePin: isProtected ? key : '',
+          overrides: withPrivacy([], isProtected, user._id),
           executeInfo: { executeFunc: '', params: {} },
         });
         if (board) {
@@ -171,9 +152,6 @@ export function CreateBoardModal(props: CreateBoardModalProps): JSX.Element {
   // To enable/disable
   const checkProtected = (e: React.ChangeEvent<HTMLInputElement>) => {
     setProtected(e.target.checked);
-  };
-  const handlePassword = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(e.target.value);
   };
 
   // Copy the board id to the clipboard
@@ -220,28 +198,14 @@ export function CreateBoardModal(props: CreateBoardModalProps): JSX.Element {
           <ColorPicker selectedColor={color} onChange={handleColorChange}></ColorPicker>
 
           <Checkbox mt={4} mr={4} onChange={checkProtected} defaultChecked={isProtected}>
-            Board Protected with a Password
+            Private Board (only you, and whoever you allow)
           </Checkbox>
-          <InputGroup mt={4}>
-            <InputLeftElement pointerEvents="none" children={<MdLock size={'24px'} />} />
-            <Input
-              type="text"
-              autoCapitalize="off"
-              placeholder={'Set Password'}
-              _placeholder={{ opacity: 1, color: 'gray.600' }}
-              mr={4}
-              value={password}
-              onChange={handlePassword}
-              isRequired={isProtected}
-              isDisabled={!isProtected}
-            />
-          </InputGroup>
         </ModalBody>
         <ModalFooter>
           <Button
             colorScheme="green"
             onClick={() => create()}
-            isDisabled={!name || (isProtected && !password) || pendingCreate}
+            isDisabled={!name || pendingCreate}
           >
             Create
           </Button>

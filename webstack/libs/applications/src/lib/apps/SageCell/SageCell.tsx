@@ -63,7 +63,7 @@ import { throttle } from 'throttle-debounce';
 
 // SAGE3 Component imports
 import {
-  useAbility,
+  useCan,
   apiUrls,
   useAppStore,
   useHexColor,
@@ -77,7 +77,7 @@ import {
   useLinkStore,
 } from '@sage3/frontend';
 import { KernelInfo, ContentItem } from '@sage3/shared/types';
-import { SAGE3Ability } from '@sage3/shared';
+import { Permission } from '@sage3/shared';
 
 // App Imports
 import { App } from '../../schema';
@@ -102,7 +102,7 @@ function AppComponent(props: App): JSX.Element {
   if (!user) return <></>;
 
   // Abilties
-  const canExecuteCode = useAbility('execute', 'kernels');
+  const canExecuteCode = useCan(Permission.ExecuteCode);
 
   // App state
   const s = props.data.state as AppState;
@@ -313,8 +313,7 @@ function AppComponent(props: App): JSX.Element {
   const throttleFunc = useCallback(throttleUpdate, [editorRef.current]);
 
   const handleExecute = async () => {
-    const canExec = SAGE3Ability.canCurrentUser('execute', 'kernels');
-    if (!user || !editorRef.current || !apiStatus || !access || !canExec) return;
+    if (!user || !editorRef.current || !apiStatus || !access || !canExecuteCode) return;
     updateState(props._id, { code: editorRef.current.getValue() });
     // Get the kernel from the store, since function executed from monoaco editor
     const kernel = useStore.getState().kernel[props._id];

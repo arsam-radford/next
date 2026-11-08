@@ -13,7 +13,6 @@ import { mountStoreDevtool } from 'simple-zustand-devtools';
 
 // Application specific schema
 import { Presence, PresencePartial, PresenceSchema } from '@sage3/shared/types';
-import { SAGE3Ability } from '@sage3/shared';
 
 import { APIHttp, SocketAPI } from '../api';
 
@@ -70,14 +69,12 @@ const PresenceStore = create<PresenceState>()((set, get) => {
       set({ error: null });
     },
     update: async (id: string, updates: Partial<PresenceSchema>) => {
-      if (!SAGE3Ability.canCurrentUser('update', 'presence')) return;
       const res = await SocketAPI.sendRESTMessage(`/presence/${id}`, 'PUT', { ...updates, status: 'online' });
       if (!res.success) {
         set({ error: res.message });
       }
     },
     subscribe: async () => {
-      if (!SAGE3Ability.canCurrentUser('read', 'presence')) return;
       set({ presences: [], partialPrescences: [] });
       const reponse = await APIHttp.GET<Presence>('/presence');
       if (reponse.success) {

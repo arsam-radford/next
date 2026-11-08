@@ -25,12 +25,12 @@ import {
   Text,
 } from '@chakra-ui/react';
 
-import { v5 as uuidv5 } from 'uuid';
-import { MdPerson, MdLock } from 'react-icons/md';
+import { MdPerson } from 'react-icons/md';
 
 import { Board, BoardSchema } from '@sage3/shared/types';
-import { isAlphanumericWithSpacesAndForeign, SAGEColors } from '@sage3/shared';
-import { useBoardStore, useAppStore, useConfigStore, ConfirmModal } from '@sage3/frontend';
+import { isAlphanumericWithSpacesAndForeign, SAGEColors, isPrivateBoard, withPrivacy } from '@sage3/shared';
+import { useBoardStore, useAppStore, ConfirmModal } from '@sage3/frontend';
+import { BoardPermissionsModal } from '../permissions';
 import { ColorPicker } from '../general';
 
 interface EditBoardModalProps {
@@ -43,9 +43,6 @@ interface EditBoardModalProps {
 const NAME_MAX = 50;
 
 export function EditBoardModal(props: EditBoardModalProps): JSX.Element {
-  // Configuration information
-  const config = useConfigStore((state) => state.config);
-
   const [name, setName] = useState<BoardSchema['name']>(props.board.data.name);
   const [color, setColor] = useState<BoardSchema['color']>(props.board.data.color);
 
@@ -56,18 +53,17 @@ export function EditBoardModal(props: EditBoardModalProps): JSX.Element {
   const boards = useBoardStore((state) => state.boards);
   const deleteBoard = useBoardStore((state) => state.delete);
   const updateBoard = useBoardStore((state) => state.update);
+  const saveOverrides = useBoardStore((state) => state.saveOverrides);
 
   // Apps
   const fetchBoardApps = useAppStore((state) => state.fetchBoardApps);
   const deleteApp = useAppStore((state) => state.delete);
 
   const [isProtected, setProtected] = useState(false);
-  const [password, setPassword] = useState('');
-  const [valid, setValid] = useState(true);
-  const [isPasswordChanged, setPasswordChanged] = useState(false);
 
   // Delete Confirmation  Modal
   const { isOpen: delConfirmIsOpen, onOpen: delConfirmOnOpen, onClose: delConfirmOnClose } = useDisclosure();
+  const { isOpen: permissionsIsOpen, onOpen: permissionsOnOpen, onClose: permissionsOnClose } = useDisclosure();
 
   // Toast
   const toast = useToast();
@@ -75,8 +71,7 @@ export function EditBoardModal(props: EditBoardModalProps): JSX.Element {
   useEffect(() => {
     setName(props.board.data.name);
     setColor(props.board.data.color);
-    setProtected(props.board.data.isPrivate);
-    setPassword('');
+    setProtected(isPrivateBoard(props.board.data));
   }, [props.board]);
 
   // When the modal panel opens, select the text for quick replacing
@@ -112,19 +107,12 @@ export function EditBoardModal(props: EditBoardModalProps): JSX.Element {
       updateBoard(props.board._id, { color });
       updated = true;
     }
-    if (isProtected !== props.board.data.isPrivate) {
-      updateBoard(props.board._id, { isPrivate: isProtected });
+    if (isProtected !== isPrivateBoard(props.board.data)) {
+      const overrides = props.board.data.overrides;
+      saveOverrides(props.board._id, withPrivacy(overrides, isProtected, props.board.data.ownerId), overrides).then((error) =>
+        error ? toast({ title: error, status: 'error', duration: 3000 }) : undefined
+      );
       updated = true;
-    }
-    if (isProtected && isPasswordChanged) {
-      if (password) {
-        // hash the PIN: the namespace comes from the server configuration
-        const key = uuidv5(password, config.namespace);
-        updateBoard(props.board._id, { privatePin: key });
-        updated = true;
-      } else {
-        setValid(false);
-      }
     }
     if (updated) {
       toast({
@@ -189,12 +177,6 @@ export function EditBoardModal(props: EditBoardModalProps): JSX.Element {
   // To enable/disable
   const checkProtected = (e: React.ChangeEvent<HTMLInputElement>) => {
     setProtected(e.target.checked);
-    setValid(!e.target.checked);
-  };
-  const handlePassword = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPasswordChanged(true);
-    setValid(!!e.target.value);
-    setPassword(e.target.value);
   };
 
   return (
@@ -227,29 +209,18 @@ export function EditBoardModal(props: EditBoardModalProps): JSX.Element {
           <ColorPicker selectedColor={color as SAGEColors} onChange={handleColorChange}></ColorPicker>
 
           <Checkbox mt={4} mr={4} onChange={checkProtected} defaultChecked={isProtected}>
-            Board Protected with a Password
+            Private Board (only its owner, and whoever is allowed)
           </Checkbox>
-          <InputGroup mt={4}>
-            <InputLeftElement pointerEvents="none" children={<MdLock size={'24px'} />} />
-            <Input
-              type="text"
-              autoCapitalize="off"
-              placeholder={'Set Password'}
-              _placeholder={{ opacity: 1, color: 'gray.600' }}
-              mr={4}
-              value={password}
-              onChange={handlePassword}
-              isRequired={isProtected}
-              isDisabled={!isProtected}
-            />
-          </InputGroup>
         </ModalBody>
         <ModalFooter pl="4" pr="8" mb="2">
           <Box display="flex" justifyContent="space-between" width="100%">
             <Button colorScheme="red" onClick={delConfirmOnOpen} mx="2">
               Delete
             </Button>
-            <Button colorScheme="green" onClick={handleSubmit} isDisabled={!name || !valid}>
+            <Button onClick={permissionsOnOpen} mx="2">
+              Permissions
+            </Button>
+            <Button colorScheme="green" onClick={handleSubmit} isDisabled={!name}>
               Update
             </Button>
           </Box>
@@ -265,6 +236,7 @@ export function EditBoardModal(props: EditBoardModalProps): JSX.Element {
         confirmText="Delete"
         confirmColor="red"
       ></ConfirmModal>
+      {permissionsIsOpen && <BoardPermissionsModal isOpen={permissionsIsOpen} onClose={permissionsOnClose} board={props.board} />}
     </Modal>
   );
 }

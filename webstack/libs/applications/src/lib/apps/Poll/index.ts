@@ -12,6 +12,8 @@ const pollOptionSchema = z.object({
   id: z.string(),
   option: z.string(),
   votes: z.number(),
+  // Who voted for the option. Votes cast before this was recorded have no voters.
+  voters: z.array(z.string()).optional(),
 });
 
 export type PollOption = z.infer<typeof pollOptionSchema>;

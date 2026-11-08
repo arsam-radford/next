@@ -6,10 +6,11 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+import { Permission } from '@sage3/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { Box, Button, useDisclosure, Text, Flex, Divider, Spacer, Tooltip } from '@chakra-ui/react';
 
-import { UploadModal, useAssetStore, useRoomStore, useUsersStore, useAbility } from '@sage3/frontend';
+import { UploadModal, useAssetStore, useRoomStore, useUsersStore, useCan, useUser } from '@sage3/frontend';
 import { FileEntry } from '@sage3/shared/types';
 import { Files } from './Files';
 
@@ -38,8 +39,11 @@ export function AssetsMenu(props: AssetsMenuProps) {
   const users = useUsersStore((state) => state.users);
 
   // Ablities
-  const canUpload = useAbility('upload', 'assets');
-  const canDowload = useAbility('download', 'assets');
+  const canUpload = useCan(Permission.UploadAssets);
+  const canDowload = useCan(Permission.DownloadOthersAssets);
+  // Other people's files are listed only with Browse Others' Files; your own always are
+  const canBrowse = useCan(Permission.BrowseOthersAssets);
+  const me = useUser().user?._id;
 
   const assets = useAssetStore((state) => state.assets);
   const [assetsList, setAssetsList] = useState<FileEntry[]>([]);
@@ -50,7 +54,7 @@ export function AssetsMenu(props: AssetsMenuProps) {
     // Get the room name
     setRoomName(rooms.find((el) => el._id === props.roomId)?.data.name ?? 'Main Room');
     // Filter the asset keys for this room
-    const filterbyRoom = assets.filter((k) => k.data.room === props.roomId);
+    const filterbyRoom = assets.filter((k) => k.data.room === props.roomId && (canBrowse || k.data.owner === me));
     // Create entries
     setAssetsList(
       filterbyRoom.map((item) => {
@@ -73,7 +77,7 @@ export function AssetsMenu(props: AssetsMenuProps) {
         return entry;
       })
     );
-  }, [assets, props.roomId]);
+  }, [assets, props.roomId, canBrowse, me]);
 
   // Download assets: all if none selected, selected ones if some are selected
   const downloadRoomAssets = useCallback(() => {

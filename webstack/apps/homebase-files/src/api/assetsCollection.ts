@@ -23,7 +23,9 @@ import express from 'express';
 // SAGE3 modules
 import { AssetSchema, ExtraVideoType, ExtraImageType } from '@sage3/shared/types';
 import { getStaticAssetUrl, SAGE3Collection, sageRouter } from '@sage3/backend';
-import { isPDF, isImage, isGIF, isVideo } from '@sage3/shared';
+import { boardPermissionsOf, roomPermissionsOf } from '@sage3/backend/permissions';
+import { SBAuthSchema } from '@sage3/sagebase';
+import { has, isPDF, isImage, isGIF, isVideo, Permission } from '@sage3/shared';
 
 // Queue for tasks
 import { PDFProcessor, ImageProcessor, MetadataProcessor } from '../processors';
@@ -60,11 +62,32 @@ class SAGE3AssetsCollection extends SAGE3Collection<AssetSchema> {
     this.router().post('/upload', uploadHandler);
     // Access to uploaded files: GET /api/assets/static/:filename
     const assetFolder = config.public;
+    this.router().use('/static', (req, res, next) => {
+      this.mayOpen(req.user as SBAuthSchema, decodeURIComponent(req.path.slice(1)))
+        .then((allowed) => (allowed ? next() : res.status(403).send({ success: false, message: "Downloading this file needs Download Others' Files." })))
+        .catch(next);
+    });
     this.router().use('/static', express.static(assetFolder, { maxAge: '30d' }));
     // Finish the initialization by adding file processors
     this.setup();
     // Check the consistency of the collection
     await this.check();
+  }
+
+  /**
+   * Whether a user may fetch a stored file. Derived files (thumbnails, rendered pages) are what apps
+   * show, so anyone may load them. An original that has a rendered version is a download: it needs to
+   * be the user's own, or Download Others' Files. Originals without one (video, CSV, 3D) are how their
+   * apps show them, so they stay open like the derived files.
+   */
+  private async mayOpen(auth: SBAuthSchema, file: string): Promise<boolean> {
+    const asset = (await this.query('file', file))?.[0];
+    if (!asset || asset.data.owner === auth.id) return true;
+    const derived = asset.data.derived as { sizes?: unknown[] } | unknown[] | undefined;
+    const rendered = Array.isArray(derived) ? derived.length > 0 : (derived?.sizes?.length ?? 0) > 0;
+    if (!rendered) return true;
+    const permissions = asset.data.board ? await boardPermissionsOf(auth, asset.data.board) : await roomPermissionsOf(auth, asset.data.room);
+    return has(permissions, Permission.DownloadOthersAssets);
   }
 
   /**

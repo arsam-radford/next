@@ -6,6 +6,7 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+import { isPrivateBoard } from '@sage3/shared';
 import { useRef } from 'react';
 import {
   useColorModeValue,
@@ -164,7 +165,7 @@ export function BoardCard(props: BoardCardProps) {
           <Box gridArea="preview" position="relative" overflow="hidden">
             <Box display="flex">
               <Box position="absolute" height={0} width="100%" bottom="6">
-                <UserPresenceIcons usersPresent={props.usersPresent} maxUsersDisplayed={5} anonymousNames={props.board.data.isPrivate} />
+                <UserPresenceIcons usersPresent={props.usersPresent} maxUsersDisplayed={5} anonymousNames={isPrivateBoard(props.board.data)} />
               </Box>
             </Box>
             <BoardPreview board={props.board} width={230} height={120} isSelected={props.selected} appInfo={props.appInfo} />

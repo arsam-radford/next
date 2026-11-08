@@ -74,6 +74,10 @@ export interface ServerConfiguration {
     // Which screenshare backend the server offers. Not set in the configuration
     // file: computed from the credentials in `services` and sent to clients.
     screenshare?: ScreenshareBackend;
+    // Only instance administrators can create rooms
+    restrictRoomCreation?: boolean;
+    // Days the room audit logs are kept (default 30)
+    auditDays?: number;
   };
 
   // ID management API keys

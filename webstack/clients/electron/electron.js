@@ -139,7 +139,7 @@ updateElectronApp({
   updateSource: {
     host: 'https://update.electronjs.org',
     type: UpdateSourceType.ElectronPublicUpdateService,
-    repo: 'SAGE-3/next',
+    repo: 'arsam-radford/next',
   },
   updateInterval: '10 minutes',
   logger: log,

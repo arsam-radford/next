@@ -19,6 +19,6 @@ export * from './useFiles';
 export * from './useThrottleApps';
 export * from './useThrottleScale';
 export * from './useThrottlePresenceUsers';
-export * from './useAbility';
+export * from './usePermissions';
 export * from './useNetworkState';
 export * from './usePressureObserver';

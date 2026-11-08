@@ -97,6 +97,10 @@ function AppComponent(props: App): JSX.Element {
 
   // App state management
   const updateState = useAppStore((state) => state.updateState);
+  const act = useAppStore((state) => state.act);
+  // Post messages, and the AI history that goes with them. The server adds them to what is there.
+  const post = (messages: AppState['messages'], previousQ: string[] = [], previousA: string[] = []) =>
+    act(props._id, 'post', { messages, previousQ, previousA });
   // Get presences of users
   const users = useUsersStore((state) => state.users);
   // Model Preferences
@@ -347,21 +351,17 @@ function AppComponent(props: App): JSX.Element {
     if (!isQuestion) {
       // Peer chat message — just post it to the transcript
       const now = await serverTime();
-      updateState(props._id, {
-        ...s,
-        messages: [
-          ...s.messages,
-          {
-            id: genId(),
-            userId: user._id,
-            creationId: '',
-            creationDate: now.epoch,
-            userName: user?.data.name,
-            query: new_input,
-            response: '',
-          },
-        ],
-      });
+      post([
+        {
+          id: genId(),
+          userId: user._id,
+          creationId: '',
+          creationDate: now.epoch,
+          userName: user?.data.name,
+          query: new_input,
+          response: '',
+        },
+      ]);
       return;
     }
     // Question to SAGE — let the backend read linked apps' content from appIds;
@@ -412,21 +412,17 @@ function AppComponent(props: App): JSX.Element {
         // Get server time
         const now = await serverTime();
         // Add the current text as a message
-        updateState(props._id, {
-          ...s,
-          messages: [
-            ...s.messages,
-            {
-              id: genId(),
-              userId: user._id,
-              creationId: '',
-              creationDate: now.epoch,
-              userName: 'SAGE',
-              query: '',
-              response: streamText + '...(interrupted)',
-            },
-          ],
-        });
+        post([
+          {
+            id: genId(),
+            userId: user._id,
+            creationId: '',
+            creationDate: now.epoch,
+            userName: 'SAGE',
+            query: '',
+            response: streamText + '...(interrupted)',
+          },
+        ]);
       }
       setStreamText('');
     }
@@ -458,7 +454,7 @@ function AppComponent(props: App): JSX.Element {
       query: displayQuery,
       response: 'Working on it...',
     };
-    updateState(props._id, { ...s, messages: [...s.messages, placeholder] });
+    post([placeholder]);
     setProcessing(true);
     const response = await callAsk(body);
     setProcessing(false);
@@ -477,16 +473,11 @@ function AppComponent(props: App): JSX.Element {
     setStreamText('');
     ctrlRef.current = null;
     setPreviousAnswer((prevItems) => [...prevItems, new_text]);
-    updateState(props._id, {
-      ...s,
-      previousQ: [...s.previousQ, displayQuery],
-      previousA: [...s.previousA, new_text],
-      messages: [
-        ...s.messages,
-        placeholder,
-        { id: genId(), userId: user._id, creationId: '', creationDate: now.epoch + 1, userName: 'SAGE', query: '', response: new_text },
-      ],
-    });
+    post(
+      [{ id: genId(), userId: user._id, creationId: '', creationDate: now.epoch + 1, userName: 'SAGE', query: '', response: new_text }],
+      [displayQuery],
+      [new_text],
+    );
     if (response.actions && response.actions.length > 0) setActions(response.actions);
   };
 
@@ -575,7 +566,7 @@ function AppComponent(props: App): JSX.Element {
             query: prompt,
             response: 'Working on it...',
           };
-          updateState(props._id, { ...s, messages: [...s.messages, initialAnswer] });
+          post([initialAnswer]);
 
           // Build the query
           const q: ImageQuery = {
@@ -611,13 +602,8 @@ function AppComponent(props: App): JSX.Element {
             ctrlRef.current = null;
             setPreviousAnswer((prevItems) => [...prevItems, response.r]);
             // Add messages
-            updateState(props._id, {
-              ...s,
-              previousQ: [...s.previousQ, 'Describe the content'],
-              previousA: [...s.previousA, response.r],
-              messages: [
-                ...s.messages,
-                initialAnswer,
+            post(
+              [
                 {
                   id: genId(),
                   userId: user._id,
@@ -628,7 +614,9 @@ function AppComponent(props: App): JSX.Element {
                   response: response.r,
                 },
               ],
-            });
+              ['Describe the content'],
+              [response.r],
+            );
             if (response.actions) {
               setActions(response.actions);
             }
@@ -695,7 +683,7 @@ function AppComponent(props: App): JSX.Element {
             query: prompt,
             response: isQuestion ? 'Working on it...' : '',
           };
-          updateState(props._id, { ...s, messages: [...s.messages, initialAnswer] });
+          post([initialAnswer]);
 
           if (isQuestion) {
             const request = isQuestion ? prompt.slice(2) : prompt;
@@ -723,13 +711,8 @@ function AppComponent(props: App): JSX.Element {
               const errorMessage = 'There has been an error, please try again or report it through the menu.';
               setStreamText('');
               setPreviousAnswer((prevItems) => [...prevItems, errorMessage]);
-              updateState(props._id, {
-                ...s,
-                previousQ: [...s.previousQ, q.q],
-                previousA: [...s.previousA, errorMessage],
-                messages: [
-                  ...s.messages,
-                  initialAnswer,
+              post(
+                [
                   {
                     id: genId(),
                     userId: user._id,
@@ -740,7 +723,9 @@ function AppComponent(props: App): JSX.Element {
                     response: errorMessage,
                   },
                 ],
-              });
+                [q.q],
+                [errorMessage],
+              );
               toast({
                 title: 'Error',
                 description: response.message || 'Error sending query to the agent. Please try again.',
@@ -754,13 +739,8 @@ function AppComponent(props: App): JSX.Element {
               ctrlRef.current = null;
               setPreviousAnswer((prevItems) => [...prevItems, response.r]);
               // Add messages
-              updateState(props._id, {
-                ...s,
-                previousQ: [...s.previousQ, q.q],
-                previousA: [...s.previousA, response.r],
-                messages: [
-                  ...s.messages,
-                  initialAnswer,
+              post(
+                [
                   {
                     id: genId(),
                     userId: user._id,
@@ -771,7 +751,9 @@ function AppComponent(props: App): JSX.Element {
                     response: response.r,
                   },
                 ],
-              });
+                [q.q],
+                [response.r],
+              );
               if (response.actions) {
                 setActions(response.actions);
               }
@@ -804,7 +786,7 @@ function AppComponent(props: App): JSX.Element {
             query: prompt,
             response: 'Working on it...',
           };
-          updateState(props._id, { ...s, messages: [...s.messages, initialAnswer] });
+          post([initialAnswer]);
 
           // Build the query
           const q: WebQuery = {
@@ -841,13 +823,8 @@ function AppComponent(props: App): JSX.Element {
             ctrlRef.current = null;
             setPreviousAnswer((prevItems) => [...prevItems, response.r]);
             // Add messages
-            updateState(props._id, {
-              ...s,
-              previousQ: [...s.previousQ, 'Describe the content'],
-              previousA: [...s.previousA, response.r],
-              messages: [
-                ...s.messages,
-                initialAnswer,
+            post(
+              [
                 {
                   id: genId(),
                   userId: user._id,
@@ -858,7 +835,9 @@ function AppComponent(props: App): JSX.Element {
                   response: response.r,
                 },
               ],
-            });
+              ['Describe the content'],
+              [response.r],
+            );
             if (response.actions) {
               setActions(response.actions);
             }
@@ -943,7 +922,7 @@ function AppComponent(props: App): JSX.Element {
             query: prompt,
             response: 'Working on it...',
           };
-          updateState(props._id, { ...s, messages: [...s.messages, initialAnswer] });
+          post([initialAnswer]);
 
           // Build the query
           const q: WebScreenshot = {
@@ -977,13 +956,8 @@ function AppComponent(props: App): JSX.Element {
             ctrlRef.current = null;
             setPreviousAnswer((prevItems) => [...prevItems, response.r]);
             // Add messages
-            updateState(props._id, {
-              ...s,
-              previousQ: [...s.previousQ, prompt],
-              previousA: [...s.previousA, response.r],
-              messages: [
-                ...s.messages,
-                initialAnswer,
+            post(
+              [
                 {
                   id: genId(),
                   userId: user._id,
@@ -994,7 +968,9 @@ function AppComponent(props: App): JSX.Element {
                   response: response.r,
                 },
               ],
-            });
+              [prompt],
+              [response.r],
+            );
             if (response.actions) {
               setActions(response.actions);
             }
@@ -1020,7 +996,7 @@ function AppComponent(props: App): JSX.Element {
       query: displayQuery,
       response: 'Working on it...',
     };
-    updateState(props._id, { ...s, messages: [...s.messages, placeholder] });
+    post([placeholder]);
     setProcessing(true);
     const response = await callCode(body);
     setProcessing(false);
@@ -1039,16 +1015,11 @@ function AppComponent(props: App): JSX.Element {
     setStreamText('');
     ctrlRef.current = null;
     setPreviousAnswer((prevItems) => [...prevItems, new_text]);
-    updateState(props._id, {
-      ...s,
-      previousQ: [...s.previousQ, displayQuery],
-      previousA: [...s.previousA, new_text],
-      messages: [
-        ...s.messages,
-        placeholder,
-        { id: genId(), userId: user._id, creationId: '', creationDate: now.epoch + 1, userName: 'SAGE', query: '', response: new_text },
-      ],
-    });
+    post(
+      [{ id: genId(), userId: user._id, creationId: '', creationDate: now.epoch + 1, userName: 'SAGE', query: '', response: new_text }],
+      [displayQuery],
+      [new_text],
+    );
     if (response.actions && response.actions.length > 0) setActions(response.actions);
   };
 
@@ -1087,21 +1058,17 @@ function AppComponent(props: App): JSX.Element {
     if (!isQuestion) {
       // Peer chat message — just post it
       const now = await serverTime();
-      updateState(props._id, {
-        ...s,
-        messages: [
-          ...s.messages,
-          {
-            id: genId(),
-            userId: user._id,
-            creationId: '',
-            creationDate: now.epoch,
-            userName: user?.data.name,
-            query: prompt,
-            response: '',
-          },
-        ],
-      });
+      post([
+        {
+          id: genId(),
+          userId: user._id,
+          creationId: '',
+          creationDate: now.epoch,
+          userName: user?.data.name,
+          query: prompt,
+          response: '',
+        },
+      ]);
       return;
     }
     if (!canPerform('coding')) return;
@@ -1173,7 +1140,7 @@ function AppComponent(props: App): JSX.Element {
       query: label,
       response: 'Working on it...',
     };
-    updateState(props._id, { ...s, messages: [...s.messages, placeholder] });
+    post([placeholder]);
     setProcessing(true);
     try {
       // Generic image generation: the linked text becomes the prompt as-is.
@@ -1194,6 +1161,7 @@ function AppComponent(props: App): JSX.Element {
       const fd = new FormData();
       fd.append('files', imgFile);
       fd.append('room', roomId!);
+      fd.append('board', boardId ?? '');
       const uploadRes = await fetch(apiUrls.assets.upload, { method: 'POST', body: fd, credentials: 'include' });
       if (!uploadRes.ok) throw new Error('Asset upload failed');
       const uploadedIds = (await uploadRes.json()) as string[];
@@ -1212,22 +1180,17 @@ function AppComponent(props: App): JSX.Element {
         dragging: false,
         pinned: false,
       });
-      updateState(props._id, {
-        ...s,
-        messages: [
-          ...s.messages,
-          placeholder,
-          {
-            id: genId(),
-            userId: user._id,
-            creationId: '',
-            creationDate: now.epoch + 1,
-            userName: 'SAGE',
-            query: '',
-            response: 'Image generated from the linked text and placed next to the chat window.',
-          },
-        ],
-      });
+      post([
+        {
+          id: genId(),
+          userId: user._id,
+          creationId: '',
+          creationDate: now.epoch + 1,
+          userName: 'SAGE',
+          query: '',
+          response: 'Image generated from the linked text and placed next to the chat window.',
+        },
+      ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       toast({ title: 'Image generation failed', description: msg, status: 'error', duration: 4000, isClosable: true });

@@ -19,6 +19,8 @@ import { useAppStore } from './stores/app';
 import { usePluginStore } from './stores/plugin';
 import { useUIStore } from './stores/ui';
 import { usePluginContextStore } from './stores/pluginContext';
+import { useBoardPermissions } from './hooks/usePermissions';
+import { has, Permission, PermissionName } from '@sage3/shared';
 import { useCursorBoardPosition } from './providers/useCursorBoardPosition';
 import { useYjs } from './providers/useYjs';
 import { readPluginAnnotations } from './plugin-annotations';
@@ -155,6 +157,7 @@ export function getPluginContext(boardId: string, roomId: string, appId?: string
     roomId,
     selectedAppIds,
     appOrder: localContext.boardId === boardId ? localContext.appOrder : [],
+    permissions: localContext.permissions.boardId === boardId ? localContext.permissions.names : [],
     viewport: { ...uiState.viewport, scale: uiState.scale },
     theme: getTheme(),
     position: {
@@ -187,6 +190,7 @@ function permittedContext(plugin: EnabledPlugin, context: PluginContext): Plugin
     theme: context.theme,
     selectedAppIds,
     appOrder: canReadApps ? context.appOrder : [],
+    permissions: context.permissions,
     app: canReadApps || ownApp ? context.app : undefined,
     document: canReadDocument ? context.document : undefined,
     position: context.position,
@@ -360,8 +364,12 @@ export function PluginFrame(props: FrameProps) {
 
   latestProps.current = props;
 
-  const toast = useToast();
+  // Kept out of the session's dependencies: the board connecting must not reload a running plugin,
+  // and cancelling a frame's load sends desktop clients back to their hub list.
+  const toast = useRef(useToast()).current;
   const { yAnnotations } = useYjs();
+  const latestAnnotations = useRef(yAnnotations);
+  latestAnnotations.current = yAnnotations;
   const packageDigest = props.plugin.data.package.digest;
   const src = `/plugins/host?${new URLSearchParams({
     roomId: props.roomId,
@@ -457,8 +465,8 @@ export function PluginFrame(props: FrameProps) {
           throw new Error('Missing annotations.read capability.');
         }
 
-        // Board frames mount inside the connected board's Yjs provider.
-        return readPluginAnnotations(yAnnotations!.doc);
+        if (!latestAnnotations.current) throw new Error('The board is still connecting.');
+        return readPluginAnnotations(latestAnnotations.current.doc);
       }
       if (method === 'ui.panel.open') {
         // openPanel matches both ids against the manifest and the board.
@@ -806,7 +814,7 @@ export function PluginFrame(props: FrameProps) {
       themeObserver.disconnect();
       window.removeEventListener('message', handleHandshake);
     };
-  }, [src, packageDigest, props.boardId, props.appId, props.viewId, props.controller, toast, yAnnotations]);
+  }, [src, packageDigest, props.boardId, props.appId, props.viewId, props.controller, toast]);
 
   return (
     <iframe
@@ -957,6 +965,11 @@ type BoardPluginRuntimeProps = Readonly<{
 }>;
 
 export function BoardPluginRuntime({ boardId, roomId }: BoardPluginRuntimeProps) {
+  const permissions = useBoardPermissions(boardId);
+  useEffect(() => {
+    const names = (Object.keys(Permission) as PermissionName[]).filter((name) => has(permissions, Permission[name]));
+    usePluginContextStore.getState().setPermissions(boardId, names);
+  }, [boardId, permissions]);
   const plugins = usePluginStore((state) => state.plugins);
   const panel = useExtensionUI((state) => state.panel);
   const menu = useExtensionUI((state) => state.menu);

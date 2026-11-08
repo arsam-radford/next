@@ -45,7 +45,7 @@ import { Asset, ExtraImageType, ExtraPDFType } from '@sage3/shared/types';
 
 import { apiUrls } from '../config';
 import { useUser } from '../providers';
-import { useAssetStore, useAppStore, useUIStore } from '../stores';
+import { useAssetStore, useAppStore, useUIStore, previewing } from '../stores';
 
 /**
  * Extracts media metadata from a file using @remotion/media-parser.
@@ -393,6 +393,7 @@ async function openSession(a: Asset, xDrop: number, yDrop: number, roomId: strin
         fd.append('files', codefile);
         // Add fields to the upload form
         fd.append('room', roomId);
+        fd.append('board', boardId);
         // Upload with a POST request
         const up = await fetch(apiUrls.assets.upload, { method: 'POST', headers: { 'x-sage3-room': roomId }, body: fd });
         const result = await up.json();
@@ -514,6 +515,10 @@ export function useFiles(): UseFiles {
    * @param {string} boardId - The ID of the board
    */
   async function uploadFiles(input: File[], dx: number, dy: number, roomId: string, boardId: string) {
+    if (previewing()) {
+      toast({ title: 'Exit "view as" to upload files.', status: 'warning', duration: 3000, isClosable: true });
+      return;
+    }
     if (input) {
       let filenames = '';
       // Uploaded with a Form object
@@ -588,6 +593,7 @@ export function useFiles(): UseFiles {
 
       // Add fields to the upload form
       fd.append('room', roomId);
+      fd.append('board', boardId);
 
       // Save the drop position
       setConfigDrop({ xDrop: dx, yDrop: dy, roomId: roomId, boardId: boardId });

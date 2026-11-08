@@ -13,7 +13,6 @@ import { mountStoreDevtool } from 'simple-zustand-devtools';
 
 // Application specific schema
 import { User } from '@sage3/shared/types';
-import { SAGE3Ability } from '@sage3/shared';
 
 import { APIHttp, SocketAPI } from '../api';
 
@@ -86,7 +85,6 @@ const UsersStore = create<UserState>()((set, get) => {
       set({ error: null });
     },
     get: async (id: string) => {
-      if (!SAGE3Ability.canCurrentUser('read', 'users')) return null;
       const user = get().users.find((user) => user._id === id);
       if (user) {
         return user;
@@ -104,7 +102,6 @@ const UsersStore = create<UserState>()((set, get) => {
     },
 
     subscribeToUsers: async () => {
-      if (!SAGE3Ability.canCurrentUser('read', 'users')) return;
       const response = await APIHttp.GET<User>('/users');
       if (response.success) {
         set({ users: response.data });

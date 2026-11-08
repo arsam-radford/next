@@ -9,11 +9,55 @@
 import { Router } from 'express';
 import { WebSocket } from 'ws';
 
-import { SAGEBase, SBCollectionRef, SBDocumentMessage, SBDocument, SBJSON, SBDocumentUpdate, SBAuthSchema } from '@sage3/sagebase';
+import {
+  SAGEBase,
+  SBCollectionRef,
+  SBDocumentMessage,
+  SBDocument,
+  SBJSON,
+  SBDocumentUpdate,
+  SBAuthSchema,
+  SBConditionalWriteResult,
+  SBPrimitive,
+} from '@sage3/sagebase';
 import { APIClientWSMessage } from '@sage3/shared/types';
 
 import { SubscriptionCache } from '../utils';
 import { sageWSRouter } from './SAGEWSRouter';
+
+/**
+ * A refused request. Thrown by access checks; the routers answer with its status and message.
+ */
+export class AccessError extends Error {
+  constructor(
+    message: string,
+    readonly status = 403,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Who may do what to a collection's documents. Each check throws an AccessError to refuse.
+ */
+export interface CollectionAccess<T extends SBJSON> {
+  // Returns the data to store, which the check may adjust (for example to force the owner).
+  create(auth: SBAuthSchema, data: T): Promise<T>;
+  read(auth: SBAuthSchema, doc: SBDocument<T>): Promise<boolean>;
+  update(auth: SBAuthSchema, doc: SBDocument<T>, update: SBDocumentUpdate<T>): Promise<void>;
+  delete(auth: SBAuthSchema, doc: SBDocument<T>): Promise<void>;
+  // Called after a successful write, for example to record it in the audit log.
+  written?(auth: SBAuthSchema, before: SBDocument<T> | undefined, after: SBDocument<T> | undefined): Promise<void>;
+}
+
+// Top-level fields to set, or to remove when undefined.
+type Fields<T> = Partial<T> | Record<string, SBPrimitive | undefined>;
+
+const refuse = async (): Promise<never> => {
+  throw new AccessError('Not allowed.');
+};
+
+export const denyAll: CollectionAccess<any> = { create: refuse, read: async () => false, update: refuse, delete: refuse };
 
 ///////////////////////////////////////////////////////////////////////////////
 // SAGE3 Collection collection
@@ -30,6 +74,9 @@ export class SAGE3Collection<T extends SBJSON> {
   private _publishUpdates: boolean;
 
   private _httpRouter!: Router;
+
+  // Collections that clients reach through the generic routers set their own rules.
+  public access: CollectionAccess<T> = denyAll;
 
   constructor(name: string, queryableAttributes: Partial<T>, options?: { publishUpdates?: boolean }) {
     this._name = name;
@@ -176,6 +223,14 @@ export class SAGE3Collection<T extends SBJSON> {
     }
   }
 
+  /**
+   * Update top-level fields only if the given fields still hold the given values, atomically.
+   */
+  public async updateIf(id: string, by: string, changes: Fields<T>, conditions: Fields<T>): Promise<SBConditionalWriteResult<T>> {
+    const entries = (o: Fields<T>) => Object.entries(o).map(([key, value]) => ({ segments: [key], value: value as SBPrimitive }));
+    return this._collection.docRef(id).updateNestedMany(entries(changes), by, entries(conditions));
+  }
+
   public async updateBatch(updates: { id: string; updates: SBDocumentUpdate<T> }[], by: string): Promise<SBDocument<T>[] | undefined> {
     try {
       const docs = await this._collection.updateDocs(updates, by);
@@ -275,6 +330,52 @@ export class SAGE3Collection<T extends SBJSON> {
       this.printError(error);
       return undefined;
     }
+  }
+
+  /**
+   * Checked operations, used by the generic REST and WebSocket routers.
+   */
+  public async createAs(auth: SBAuthSchema, items: T[]): Promise<SBDocument<T>[]> {
+    const data: T[] = [];
+    for (const item of items) data.push(await this.access.create(auth, item));
+    const docs = data.length === 1 ? [await this.add(data[0], auth.id)] : await this.addBatch(data, auth.id);
+    if (!docs || docs.some((doc) => !doc)) throw new AccessError('Failed to create.', 500);
+    for (const doc of docs as SBDocument<T>[]) await this.access.written?.(auth, undefined, doc);
+    return docs as SBDocument<T>[];
+  }
+
+  public async readAs(auth: SBAuthSchema, docs: SBDocument<T>[]): Promise<SBDocument<T>[]> {
+    const visible = await Promise.all(docs.map((doc) => this.access.read(auth, doc)));
+    return docs.filter((_doc, i) => visible[i]);
+  }
+
+  public async updateAs(auth: SBAuthSchema, updates: { id: string; updates: SBDocumentUpdate<T> }[]): Promise<SBDocument<T>[]> {
+    const before: SBDocument<T>[] = [];
+    for (const u of updates) {
+      const doc = await this.get(u.id);
+      if (!doc) throw new AccessError('Not found.', 404);
+      before.push(doc);
+      await this.access.update(auth, doc, u.updates);
+    }
+
+    const after = updates.length === 1 ? [await this.update(updates[0].id, auth.id, updates[0].updates)] : ((await this.updateBatch(updates, auth.id)) ?? []);
+    if (after.length !== updates.length || after.some((doc) => !doc)) throw new AccessError('Failed to update.', 500);
+    for (let i = 0; i < before.length; i++) await this.access.written?.(auth, before[i], after[i]);
+    return after as SBDocument<T>[];
+  }
+
+  public async deleteAs(auth: SBAuthSchema, ids: string[]): Promise<string[]> {
+    const docs: SBDocument<T>[] = [];
+    for (const id of ids) {
+      const doc = await this.get(id);
+      if (!doc) throw new AccessError('Not found.', 404);
+      await this.access.delete(auth, doc);
+      docs.push(doc);
+    }
+    const deleted = ids.length === 1 ? [await this.delete(ids[0])] : await this.deleteBatch(ids);
+    if (!deleted || deleted.some((id) => !id)) throw new AccessError('Failed to delete.', 500);
+    for (const doc of docs) await this.access.written?.(auth, doc, undefined);
+    return deleted as string[];
   }
 
   protected set httpRouter(router: Router) {

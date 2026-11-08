@@ -75,7 +75,11 @@ import { GoLink, GoUnlink } from 'react-icons/go';
 import { formatDistance } from 'date-fns';
 
 import {
-  useAbility,
+  useAppPermissions,
+  useUser,
+  AppReadOnlyMenuItem,
+  AppPermissionsMenuItems,
+  AppPermissionsModal,
   PluginActions,
   useAppStore,
   useHexColor,
@@ -93,7 +97,7 @@ import {
   apiUrls,
   useLinkStore,
 } from '@sage3/frontend';
-import { SAGEColors } from '@sage3/shared';
+import { SAGEColors, Permission, appPermission, has } from '@sage3/shared';
 import { AI_ENABLED_APPS, Applications, getApplication } from '@sage3/applications/apps';
 import { Link, Position, Size } from '@sage3/shared/types';
 import ky from 'ky';
@@ -186,10 +190,14 @@ export function AppToolbar(props: AppToolbarProps) {
   const insights = useInsightStore((state) => state.insights);
   const updateInsight = useInsightStore((state) => state.update);
 
-  // Abilities
-  const canDeleteApp = useAbility('delete', 'apps');
-  const canDuplicateApp = useAbility('create', 'apps');
-  const canPin = useAbility('pin', 'apps');
+  // Permissions on this app: its board's, adjusted by its own overrides
+  const { user } = useUser();
+  const permissions = useAppPermissions(app);
+  const own = app?._createdBy === user?._id;
+  const canDeleteApp = has(permissions, appPermission('Delete', own));
+  const canDuplicateApp = has(permissions, Permission.CreateApps);
+  const canPin = has(permissions, appPermission('Arrange', own));
+  const { isOpen: isWhoOpen, onOpen: onWhoOpen, onClose: onWhoClose } = useDisclosure();
 
   useLayoutEffect(() => {
     if (app && boxRef.current) {
@@ -668,7 +676,7 @@ export function AppToolbar(props: AppToolbarProps) {
         {overflowTags.length > 0 && (
           <Box>
             <Tooltip placement="top" hasArrow={true} openDelay={400} label={isOverflowOpen ? 'Hide more tags' : 'Show more tags'}>
-              <Button size="xs" p={0} width="30px" cursor="pointer" onClick={() => setIsOverflowOpen(!isOverflowOpen)}>
+              <Button size="xs" p={0} width="30px" cursor="pointer" onClick={() => setIsOverflowOpen(!isOverflowOpen)} aria-label={isOverflowOpen ? 'Hide more tags' : 'Show more tags'}>
                 {isOverflowOpen ? <MdExpandLess size="14px" /> : <MdExpandMore size="14px" />}
               </Button>
             </Tooltip>
@@ -816,7 +824,7 @@ export function AppToolbar(props: AppToolbarProps) {
             <>
               <Text whiteSpace="nowrap">An error has occurred.</Text>
               <Tooltip placement="top" hasArrow={true} label={'Delete App'} openDelay={400} ml="1">
-                <Button onClick={() => deleteApp(app._id)} backgroundColor={commonButtonColors} size="xs" mx="1">
+                <Button onClick={() => deleteApp(app._id)} backgroundColor={commonButtonColors} size="xs" mx="1" aria-label="Delete App">
                   <MdClose color={buttonTextColor} />
                 </Button>
               </Tooltip>
@@ -838,7 +846,7 @@ export function AppToolbar(props: AppToolbarProps) {
               {({ isOpen, onClose }) => (
                 <>
                   <PopoverTrigger>
-                    <Button backgroundColor={commonButtonColors} size="xs" mx="1" p={0}>
+                    <Button backgroundColor={commonButtonColors} size="xs" mx="1" p={0} aria-label="Application information">
                       <MdInfoOutline fontSize={'16px'} color={buttonTextColor} />
                     </Button>
                   </PopoverTrigger>
@@ -880,7 +888,7 @@ export function AppToolbar(props: AppToolbarProps) {
               */}
 
               <Tooltip hasArrow={true} label={'Actions'} openDelay={300} placement="top">
-                <MenuButton size="xs" as={Button} backgroundColor={commonButtonColors} mr="1" p={0} display="grid" placeItems="center">
+                <MenuButton size="xs" as={Button} backgroundColor={commonButtonColors} mr="1" p={0} display="grid" placeItems="center" aria-label="Actions">
                   <MdMenu size="16px" color={buttonTextColor} />
                 </MenuButton>
               </Tooltip>
@@ -892,6 +900,7 @@ export function AppToolbar(props: AppToolbarProps) {
                 >
                   {app.data.pinned ? 'Unpin Application' : 'Pin Application'}
                 </MenuItem>
+                <AppReadOnlyMenuItem apps={[app]} />
                 <MenuItem
                   icon={<MdCopyAll size="16px" />}
                   onClick={() => duplicate([app._id])}
@@ -901,6 +910,7 @@ export function AppToolbar(props: AppToolbarProps) {
                 >
                   Duplicate Application
                 </MenuItem>
+                <AppPermissionsMenuItems apps={[app]} onAdvanced={onWhoOpen} />
                 <MenuDivider />
                 <MenuItem icon={<MdTv size="16px" />} onClick={() => scaleApp()} py="1px" m="0">
                   {previousSize.app === app._id && previousSize.set ? 'Restore' : 'Present inside Viewport'}
@@ -918,11 +928,12 @@ export function AppToolbar(props: AppToolbarProps) {
             </Menu>
 
             <Tooltip placement="top" hasArrow={true} label={'Delete Application'} openDelay={400} ml="1">
-              <Button onClick={onDeleteOpen} colorScheme="red" size="xs" mr="1" p={0} isDisabled={!canDeleteApp}>
+              <Button onClick={onDeleteOpen} colorScheme="red" size="xs" mr="1" p={0} isDisabled={!canDeleteApp} aria-label="Delete Application">
                 <HiOutlineTrash size="16px" />
               </Button>
             </Tooltip>
 
+            {isWhoOpen && <AppPermissionsModal isOpen={isWhoOpen} onClose={onWhoClose} app={app} />}
             {isDeleteOpen && (
               <ConfirmModal
                 isOpen={isDeleteOpen}
@@ -946,7 +957,7 @@ export function AppToolbar(props: AppToolbarProps) {
       // just the delete button
       return (
         <Tooltip placement="top" hasArrow={true} label={'Close Application'} openDelay={400} ml="1">
-          <Button onClick={() => app?._id && deleteApp(app._id)} backgroundColor={commonButtonColors} size="xs" mr="1" p={0}>
+          <Button onClick={() => app?._id && deleteApp(app._id)} backgroundColor={commonButtonColors} size="xs" mr="1" p={0} aria-label="Close Application">
             <HiOutlineTrash size="16px" color={buttonTextColor} />
           </Button>
         </Tooltip>
@@ -1077,14 +1088,14 @@ export function AppToolbar(props: AppToolbarProps) {
                 <Box>
                   {thisAppSourceLinks.length > 0 && (
                     <Tooltip placement="top" hasArrow={true} openDelay={400} ml="1" label={'Delete Links'}>
-                      <Button onClick={deleteLinks} colorScheme="red" size="xs" m={0} mr={2} p={0}>
+                      <Button onClick={deleteLinks} colorScheme="red" size="xs" m={0} mr={2} p={0} aria-label="Delete Links">
                         <FaUnlink size="16px" color={buttonTextColor} />
                       </Button>
                     </Tooltip>
                   )}
                   {thisAppSourceLinks.length === 0 && (
                     <Tooltip placement="top" hasArrow={true} openDelay={400} ml="1" label={'Link Application'}>
-                      <Button onClick={enterLinkerMode} backgroundColor={linkColor} variant="solid" size="xs" m={0} mr={2} p={0}>
+                      <Button onClick={enterLinkerMode} backgroundColor={linkColor} variant="solid" size="xs" m={0} mr={2} p={0} aria-label="Link Application">
                         <FaLink size="16px" color={'white'} />
                       </Button>
                     </Tooltip>
@@ -1098,6 +1109,7 @@ export function AppToolbar(props: AppToolbarProps) {
                   <Box>
                     <Tooltip placement="top" hasArrow={true} openDelay={400} ml="1" label={'Chat with SAGE Intelligence'}>
                       <Button
+                        aria-label="Chat with SAGE Intelligence"
                         onClick={openChat}
                         backgroundColor={intelligenceColor}
                         variant="solid"

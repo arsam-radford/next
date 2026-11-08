@@ -25,7 +25,7 @@ import {
 import { HiTrash } from 'react-icons/hi';
 import { MdAdd, MdPerson, MdPersonOff, MdSearch } from 'react-icons/md';
 
-import { fuzzySearch } from '@sage3/shared';
+import { fuzzySearch, has, Permission } from '@sage3/shared';
 import { Plugin, Room } from '@sage3/shared/types';
 import {
   useHexColor,
@@ -33,7 +33,7 @@ import {
   ConfirmModal,
   useUser,
   PluginUploadModal,
-  useAbility,
+  useRoomPermissions,
   formatDateAndTime,
   truncateWithEllipsis,
 } from '@sage3/frontend';
@@ -59,7 +59,7 @@ export function PluginsList(props: PluginsListProps): JSX.Element {
 
   // Permissions
   const canDeleteSelectedPlugin = !!user && selectedPlugin?.data.ownerId === user._id;
-  const canUploadPlugin = useAbility('upload', 'plugins');
+  const canUploadPlugin = has(useRoomPermissions(props.room._id), Permission.UploadPlugins);
 
   // Modal Disclosure
   const { isOpen: deleteIsOpen, onOpen: deleteOnOpen, onClose: deleteOnClose } = useDisclosure();

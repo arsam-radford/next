@@ -45,7 +45,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/sage-3/next:dev_amd64
+          images: ${{ env.REGISTRY }}/arsam-radford/next:dev_amd64
 
       - name: Build and push Docker image for node
         uses: docker/build-push-action@v7
@@ -54,7 +54,7 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/amd64
           push: true
-          tags: ${{ env.REGISTRY }}/sage-3/next:dev_amd64
+          tags: ${{ env.REGISTRY }}/arsam-radford/next:dev_amd64
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Build and push Docker image for node_yjs
@@ -64,7 +64,7 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/amd64
           push: true
-          tags: ${{ env.REGISTRY }}/sage-3/next_yjs:dev_amd64
+          tags: ${{ env.REGISTRY }}/arsam-radford/next_yjs:dev_amd64
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Build and push Docker image for node_files
@@ -74,7 +74,7 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/amd64
           push: true
-          tags: ${{ env.REGISTRY }}/sage-3/next_files:dev_amd64
+          tags: ${{ env.REGISTRY }}/arsam-radford/next_files:dev_amd64
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Build and push Docker image for seer
@@ -84,10 +84,12 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/amd64
           push: true
-          tags: ${{ env.REGISTRY }}/sage-3/agents:dev_amd64
+          tags: ${{ env.REGISTRY }}/arsam-radford/agents:dev_amd64
           labels: ${{ steps.meta.outputs.labels }}
 
   build-and-push-arm:
+    # Needs upstream's self-hosted Mac runner; a fork has none and would queue forever.
+    if: github.repository == 'SAGE-3/next'
     runs-on: [self-hosted, macOS, ARM64]
 
     steps:
@@ -112,7 +114,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/sage-3/next:dev_arm64
+          images: ${{ env.REGISTRY }}/arsam-radford/next:dev_arm64
 
       - name: Build and push Docker image for node
         uses: docker/build-push-action@v7
@@ -121,7 +123,7 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/arm64
           push: true
-          tags: ${{ env.REGISTRY }}/sage-3/next:dev_arm64
+          tags: ${{ env.REGISTRY }}/arsam-radford/next:dev_arm64
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Build and push Docker image for node_yjs
@@ -131,7 +133,7 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/arm64
           push: true
-          tags: ${{ env.REGISTRY }}/sage-3/next_yjs:dev_arm64
+          tags: ${{ env.REGISTRY }}/arsam-radford/next_yjs:dev_arm64
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Build and push Docker image for node_files
@@ -141,7 +143,7 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/arm64
           push: true
-          tags: ${{ env.REGISTRY }}/sage-3/next_files:dev_arm64
+          tags: ${{ env.REGISTRY }}/arsam-radford/next_files:dev_arm64
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Build and push Docker image for seer
@@ -151,5 +153,5 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/arm64
           push: true
-          tags: ${{ env.REGISTRY }}/sage-3/agents:dev_arm64
+          tags: ${{ env.REGISTRY }}/arsam-radford/agents:dev_arm64
           labels: ${{ steps.meta.outputs.labels }}

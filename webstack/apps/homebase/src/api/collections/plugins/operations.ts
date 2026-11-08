@@ -15,12 +15,13 @@ import {
 } from '@sage3/shared/types';
 import type { LinkSchema } from '@sage3/shared/types';
 import type { PluginCapability, PluginSnapshot } from '@sage3/sageplugin';
-import { checkPermissionsWS, AuthAction, AuthSubject } from '@sage3/backend/permissions';
+import { appPermissionsOf, boardPermissionsOf } from '@sage3/backend/permissions';
+import { appPermission, has, Permission as P } from '@sage3/shared';
 import { AppsCollection } from '../apps';
 import { BoardsCollection } from '../boards';
 import { LinkCollection } from '../link';
 import { isPluginAppType, parsePluginAppState, pluginAppAdapters } from './app-adapters';
-import { AssetsCollection } from '../assets';
+import { AssetsCollection, filePermissionsOf } from '../assets';
 import { performPluginTextOperation } from './text';
 import { pluginAppConditions } from './app-scope';
 
@@ -33,9 +34,26 @@ export class PluginRequestError extends Error {
   }
 }
 
-export function requirePluginPermission(user: SBAuthSchema, action: AuthAction, subject: AuthSubject): void {
-  if (!checkPermissionsWS(user, action, subject)) {
+export async function requirePluginPermission(user: SBAuthSchema, boardId: string, permission: number): Promise<void> {
+  if (!has(await boardPermissionsOf(user, boardId), permission)) {
     throw new PluginRequestError('Permission denied.', 403);
+  }
+}
+
+// Using an app (its content, text or page) needs Interact With Apps on that app, or editing it.
+async function requireAppInteraction(user: SBAuthSchema, app: App, extra = 0): Promise<void> {
+  const p = await appPermissionsOf(user, app.data);
+  if (!(has(p, P.InteractWithApps) || has(p, appPermission('Edit', app._createdBy === user.id))) || !has(p, extra)) {
+    throw new PluginRequestError('Permission denied.', 403);
+  }
+}
+
+// Plugin app writes follow the same rules as the generic app routes, including pins and app overrides.
+async function requireAppAccess(check: Promise<unknown>): Promise<void> {
+  try {
+    await check;
+  } catch (error) {
+    throw new PluginRequestError(error instanceof Error ? error.message : 'Permission denied.', 403);
   }
 }
 
@@ -145,8 +163,7 @@ const scopeParams = z.object({ pluginId: id, boardId: id });
 export async function pluginScope(collection: SAGE3Collection<PluginSchema>, params: unknown, user: SBAuthSchema) {
   const { pluginId, boardId } = scopeParams.parse(params);
 
-  // Every role that can read one collection can read all of them.
-  requirePluginPermission(user, 'GET', 'PLUGINS');
+  await requirePluginPermission(user, boardId, P.ViewBoard);
 
   const plugin = await collection.get(pluginId);
   const board = await BoardsCollection.get(boardId);
@@ -169,8 +186,8 @@ export async function performPluginOperation(
     throw new PluginRequestError('Extension is unavailable or disabled.', 403);
   }
 
-  // pluginScope proved the plugin belongs to the board's room, and every role that can read one
-  // collection can read all of them, so only writes need a further permission check.
+  // pluginScope proved the plugin belongs to the board's room and that the user can view the board,
+  // so only writes need a further permission check. Declared operations are interactions.
   const manifest = packaged.manifest;
   const roomId = plugin.data.roomId!;
   const operation = pluginOperationSchema.parse(body);
@@ -182,7 +199,7 @@ export async function performPluginOperation(
     case 'state.get':
       return stateSnapshot(plugin, boardId);
     case 'state.patch': {
-      requirePluginPermission(user, 'PUT', 'PLUGINS');
+      await requirePluginPermission(user, boardId, P.UsePlugins);
 
       const result = await document.patchNested(
         ['boardState', boardId],
@@ -210,16 +227,15 @@ export async function performPluginOperation(
 
       return saved(await AppsCollection.query('boardId', boardId)).filter((app) => app.data.roomId === roomId);
     case 'apps.create': {
-      requirePluginPermission(user, 'POST', 'APPS');
-
       const params = operation.params;
+      await requirePluginPermission(user, boardId, params.type === 'PluginApp' ? P.CreateApps | P.PlacePlugins : P.CreateApps);
       if (!isPluginAppType(params.type)) {
         throw new PluginRequestError(`Unsupported app type: ${params.type}`);
       }
 
       const parsed = parsePluginAppState(params.type, params.state ?? {});
       if (parsed.type === 'ImageViewer' || parsed.type === 'PDFViewer') {
-        await requireRoomAsset(parsed.state.assetid, roomId);
+        await requireRoomAsset(parsed.state.assetid, roomId, user);
       }
 
       if (parsed.type === 'PluginApp') {
@@ -259,10 +275,10 @@ export async function performPluginOperation(
     }
     case 'apps.update': {
       requireCapability(manifest.capabilities, 'apps.write');
-      requirePluginPermission(user, 'PUT', 'APPS');
 
       const app = await requireAppOnBoard(operation.params.id, boardId, roomId);
       const changes = operation.params.updates;
+      await requireAppAccess(AppsCollection.access.update(user, app, changes as Partial<AppSchema>));
       const updates: SBNestedChange[] = [];
 
       if (changes.title !== undefined) {
@@ -291,7 +307,7 @@ export async function performPluginOperation(
         // PluginApp content changes only through app.content.patch or text.apply: its update adapter accepts no fields.
         const parsed: SBJSON = pluginAppAdapters[app.data.type].update.parse(changes.state);
         if (typeof parsed.assetid === 'string') {
-          await requireRoomAsset(parsed.assetid, roomId);
+          await requireRoomAsset(parsed.assetid, roomId, user);
         }
 
         for (const [key, value] of Object.entries(parsed)) {
@@ -303,19 +319,15 @@ export async function performPluginOperation(
     }
     case 'apps.remove': {
       requireCapability(manifest.capabilities, 'apps.write');
-      requirePluginPermission(user, 'DELETE', 'APPS');
 
       const app = await requireAppOnBoard(operation.params.id, boardId, roomId);
+      await requireAppAccess(AppsCollection.access.delete(user, app));
 
       const applications = await SAGEBase.Database.collection<AppSchema>('APPS');
       return committed(await applications.docRef(app._id).delete(true, pluginAppConditions(app)));
     }
     case 'app.content.get':
     case 'app.content.patch': {
-      if (operation.method === 'app.content.patch') {
-        requirePluginPermission(user, 'PUT', 'APPS');
-      }
-
       const appId = operation.params.appId ?? operation.appId;
       if (!appId) {
         throw new PluginRequestError('An app id is required outside an app frame.');
@@ -325,6 +337,7 @@ export async function performPluginOperation(
       if (operation.method === 'app.content.get') {
         return contentSnapshot(app);
       }
+      await requireAppInteraction(user, app, P.UsePlugins);
 
       const applications = await SAGEBase.Database.collection<AppSchema>('APPS');
       const result = await applications
@@ -349,10 +362,6 @@ export async function performPluginOperation(
     }
     case 'text.get':
     case 'text.apply': {
-      if (operation.method === 'text.apply') {
-        requirePluginPermission(user, 'PUT', 'APPS');
-      }
-
       const target = await requireAppOnBoard(operation.params.appId, boardId, roomId);
       let app: App<'PluginApp'>;
       if (operation.method === 'text.get' && target.data.type === 'PluginApp' && target.data.state.pluginId !== plugin._id) {
@@ -361,6 +370,7 @@ export async function performPluginOperation(
       } else {
         app = requireOwnApp(target, plugin._id);
       }
+      if (operation.method === 'text.apply') await requireAppInteraction(user, app, P.UsePlugins);
 
       return performPluginTextOperation(app, operation, user.id);
     }
@@ -376,7 +386,7 @@ export async function performPluginOperation(
     }
     case 'links.create': {
       requireCapability(manifest.capabilities, 'links.write');
-      requirePluginPermission(user, 'POST', 'LINKS');
+      await requirePluginPermission(user, boardId, P.EditOwnApps);
 
       const { key, sourceAppId, targetAppId, metadata } = operation.params;
       await requireAppOnBoard(sourceAppId, boardId, roomId);
@@ -405,7 +415,7 @@ export async function performPluginOperation(
     }
     case 'links.remove': {
       requireCapability(manifest.capabilities, 'links.write');
-      requirePluginPermission(user, 'DELETE', 'LINKS');
+      await requirePluginPermission(user, boardId, P.EditOwnApps);
 
       const link = await LinkCollection.get(operation.params.id);
       if (!link || link.data.boardId !== boardId) {
@@ -427,12 +437,15 @@ export async function performPluginOperation(
     case 'assets.list':
       requireCapability(manifest.capabilities, 'assets.read');
 
-      return saved(await AssetsCollection.query('room', roomId)).map(toPluginAsset);
+      // Like the library: other people's files only with Browse Others' Files.
+      const assets = await AssetsCollection.readAs(user, saved(await AssetsCollection.query('room', roomId)));
+      const browse = await Promise.all(assets.map(async (a) => a.data.owner === user.id || has(await filePermissionsOf(user, a.data), P.BrowseOthersAssets)));
+      return assets.filter((_a, i) => browse[i]).map(toPluginAsset);
     case 'documents.navigate': {
       requireCapability(manifest.capabilities, 'documents.navigate');
-      requirePluginPermission(user, 'PUT', 'APPS');
 
       const app = await requireAppOnBoard(operation.params.appId, boardId, roomId);
+      await requireAppInteraction(user, app);
       if (app.data.type !== 'PDFViewer') {
         throw new PluginRequestError('Target must be a PDFViewer.');
       }
@@ -512,9 +525,10 @@ function saved<T>(value: T | undefined): T {
 }
 
 // Asset ids are server-generated v4 UUIDs, so a room asset is never read as an ImageViewer URL.
-async function requireRoomAsset(assetId: string, roomId: string): Promise<void> {
+// The file must be in the room and one the user can open.
+async function requireRoomAsset(assetId: string, roomId: string, user: SBAuthSchema): Promise<void> {
   const asset = await AssetsCollection.get(assetId);
-  if (!asset || asset.data.room !== roomId) {
+  if (!asset || asset.data.room !== roomId || (await AssetsCollection.readAs(user, [asset])).length === 0) {
     throw new PluginRequestError('Asset not found in this room.', 404);
   }
 }

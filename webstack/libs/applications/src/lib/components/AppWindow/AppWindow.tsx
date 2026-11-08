@@ -6,10 +6,11 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+import { appPermission, describeChange, has } from '@sage3/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, useToast, useColorModeValue, Icon, Portal, Button } from '@chakra-ui/react';
+import { Box, useToast, useColorModeValue, Icon, Portal, Button, Tooltip } from '@chakra-ui/react';
 
-import { MdWindow } from 'react-icons/md';
+import { MdShield, MdTune, MdWindow } from 'react-icons/md';
 import { IconType } from 'react-icons/lib';
 
 // SAGE3 Frontend
@@ -17,7 +18,9 @@ import {
   useAppStore,
   useUIStore,
   useHexColor,
-  useAbility,
+  useAppPermissions,
+  useRoom,
+  useUser,
   useInsightStore,
   useUserSettings,
   useCursorBoardPosition,
@@ -96,9 +99,22 @@ export function AppWindow(props: WindowProps) {
   const showUI = settings.showUI;
   const primaryActionMode = settings.primaryActionMode;
 
-  // Can update
-  const canMove = useAbility('move', 'apps');
-  const canResize = useAbility('resize', 'apps');
+  // Moving and resizing follow the app's own permissions, on top of its board's
+  const { user } = useUser();
+  const appPermissions = useAppPermissions(props.app);
+  const canMove = has(appPermissions, appPermission('Arrange', props.app._createdBy === user?._id));
+  const canResize = canMove;
+  // What the app's own permissions say, for its badge
+  const roles = useRoom(props.app.data.roomId)?.data.roles ?? [];
+  // App rules are per role. A shield when they take anything away, sliders when they only give more.
+  const overrides = (props.app.data.overrides ?? []).filter((o) => o.kind === 'role');
+  const restricts = overrides.some((o) => o.deny !== 0);
+  const overridesSummary = overrides
+    .map((o) => {
+      const who = roles.find((r) => r.id === o.target)?.name ?? o.target;
+      return `${who}: ${[describeChange(0, o.allow, 'can'), describeChange(0, o.deny, 'cannot')].filter(Boolean).join('; ')}`;
+    })
+    .join('\n');
 
   // App Store
   const update = useAppStore((state) => state.update);
@@ -712,6 +728,23 @@ export function AppWindow(props: WindowProps) {
         {memoizedChildren}
         <PluginOverlays app={props.app} />
       </Box>
+
+      {/* This app has its own permissions */}
+      {overrides.length > 0 && (
+        <Tooltip label={`${restricts ? 'Protected' : 'Its own rules'}\n${overridesSummary}`} whiteSpace="pre-line" hasArrow placement="top">
+          <Box
+            position="absolute"
+            top="6px"
+            right="6px"
+            zIndex={4}
+            color={restricts ? 'purple.400' : 'teal.400'}
+            lineHeight={0}
+            aria-label={`${restricts ? 'Protected' : 'Its own rules'}: ${overridesSummary}`}
+          >
+            <Icon as={restricts ? MdShield : MdTune} boxSize={`${Math.max(14, 16 / scale)}px`} />
+          </Box>
+        </Tooltip>
+      )}
 
       {/* Full-window drag overlay when app is NOT selected */}
       {!selected && (

@@ -395,7 +395,7 @@ function ToolbarComponent(props: App): JSX.Element {
   const { isOpen: saveIsOpen, onOpen: saveOnOpen, onClose: saveOnClose } = useDisclosure();
 
   // Room info
-  const { roomId } = useParams();
+  const { roomId, boardId } = useParams();
 
   // Sync viewURL with localURL
   useEffect(() => {
@@ -552,6 +552,7 @@ function ToolbarComponent(props: App): JSX.Element {
         const codefile = new File([new Blob([content])], val);
         fd.append('files', codefile);
         fd.append('room', roomId);
+        fd.append('board', boardId ?? '');
 
         // Upload to asset manager
         fetch(apiUrls.assets.upload, { method: 'POST', body: fd })

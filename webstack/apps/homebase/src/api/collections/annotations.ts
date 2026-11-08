@@ -7,8 +7,11 @@
  */
 
 import { AnnotationSchema } from '@sage3/shared/types';
-import { SAGE3Collection, sageRouter } from '@sage3/backend';
+import { SAGE3Collection, sageRouter, boardPermissionsOf, guarded } from '@sage3/backend';
+import { SBAuthSchema } from '@sage3/sagebase';
+import { has, Permission as P } from '@sage3/shared';
 import { BoardsCollection } from './boards';
+import { deny, needOnBoard, refuse } from './access';
 
 class SAGE3AnnotationsCollection extends SAGE3Collection<AnnotationSchema> {
   constructor() {
@@ -16,23 +19,34 @@ class SAGE3AnnotationsCollection extends SAGE3Collection<AnnotationSchema> {
     // storage.  Opt out of per-update broadcasts so a stroke commit doesn't
     // re-broadcast the entire whiteboardLines array to every subscriber.
     super('ANNOTATIONS', {}, { publishUpdates: false });
+    // One document per board, with the board's id. The server creates and deletes them.
+    this.access = {
+      create: refuse,
+      read: async (auth, doc) => has(await boardPermissionsOf(auth, doc._id), P.ViewBoard),
+      update: async (auth, doc, update) => {
+        if (Object.keys(update).some((key) => key !== 'whiteboardLines')) deny();
+        await needOnBoard(auth, doc._id, P.Annotate);
+      },
+      delete: refuse,
+    };
     const router = sageRouter<AnnotationSchema>(this);
 
     // Incremental append: add whiteboard strokes without rewriting the whole
     // array.  Committing a stroke sends only the new shape(s) (O(stroke))
     // instead of the full whiteboardLines array (O(board)).  Removes/clears
     // still go through the generic full-array PUT, which also reconciles drift.
-    router.post('/:id/lines', async ({ params, body, user }, res) => {
+    router.post('/:id/lines', guarded(async ({ params, body, user }, res) => {
+      await needOnBoard(user as SBAuthSchema, String(params.id), P.Annotate);
       const userId = (user as { id?: string })?.id || '-';
       const lines = body?.lines;
       if (!Array.isArray(lines) || lines.length === 0) {
         res.status(400).send({ success: false, message: 'Body must include a non-empty "lines" array.' });
         return;
       }
-      const ok = await this.appendLines(params.id, lines, userId);
+      const ok = await this.appendLines(String(params.id), lines, userId);
       if (ok) res.status(200).send({ success: true, message: 'Successfully appended lines.' });
       else res.status(500).send({ success: false, message: 'Failed to append lines.' });
-    });
+    }));
 
     this.httpRouter = router;
   }
